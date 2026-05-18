@@ -1,0 +1,538 @@
+/* =========================================================================
+   Trick-Taking Card Game — styles.css
+   Single stylesheet covering every selector used by index.html and ui.js.
+   Layout: 4 player areas around the edges of a central play zone, header
+   pinned to the top, modal overlays (menu / rules / end) stacked above.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1. Custom properties (theme)
+   ------------------------------------------------------------------------- */
+:root {
+    /* Felt-table palette */
+    --bg-table:        #0d3b2a;   /* deep card-table green */
+    --bg-table-edge:   #082517;   /* darker vignette */
+    --bg-panel:        #143b2c;   /* panel surfaces (player info, modals) */
+    --bg-panel-edge:   #0a2418;
+
+    /* Cards */
+    --card-face:       #fafafa;
+    --card-face-edge:  #d6d6d6;
+    --card-back:       #1f3a8a;
+    --card-back-edge:  #102050;
+    --card-red:        #c0392b;
+    --card-black:      #1c1c1c;
+    --card-shown-edge: #d4af37;   /* gold border for shown cards */
+
+    /* Accents & state */
+    --accent:          #e6c46a;   /* warm gold — also used by inline styles in index.html */
+    --accent-bright:   #f7d97a;
+    --danger:          #b14848;
+    --danger-bright:   #d05c5c;
+    --primary:         #4a7ab8;
+    --primary-bright:  #5d8dcb;
+    --success:         #3a8a4d;
+    --success-bright:  #4ea063;
+
+    /* Text */
+    --text-bright:     #fdfdfd;
+    --text-dim:        #cfd6d0;
+    --text-muted:      #8fa39a;
+
+    /* Effects */
+    --shadow-card:     0 3px 6px rgba(0,0,0,0.45);
+    --shadow-card-hi:  0 8px 18px rgba(0,0,0,0.55);
+    --shadow-panel:    0 6px 18px rgba(0,0,0,0.45);
+    --radius-card:     6px;
+    --radius-panel:    10px;
+    --radius-btn:      6px;
+
+    /* Sizing */
+    --card-w:          64px;
+    --card-h:          90px;
+    --card-overlap:    34px;   /* horizontal overlap when cards stack */
+    --card-overlap-v:  26px;   /* vertical overlap for side hands */
+    --header-h:        56px;
+}
+
+/* -------------------------------------------------------------------------
+   2. Reset & base
+   ------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--text-bright);
+    background: radial-gradient(ellipse at center,
+        var(--bg-table) 0%,
+        var(--bg-table-edge) 90%);
+    overflow: hidden;
+}
+
+button { font-family: inherit; }
+select { font-family: inherit; }
+
+/* -------------------------------------------------------------------------
+   3. Page wrapper & header
+   ------------------------------------------------------------------------- */
+.game-wrapper {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
+
+header {
+    flex: 0 0 var(--header-h);
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: linear-gradient(to bottom, #061d11 0%, #0a2718 100%);
+    border-bottom: 1px solid var(--bg-panel-edge);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    z-index: 50;
+}
+
+header .title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.4px;
+}
+
+#status-text {
+    font-size: 14px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.2px;
+}
+
+/* -------------------------------------------------------------------------
+   4. Buttons
+   ------------------------------------------------------------------------- */
+button {
+    cursor: pointer;
+    border: 1px solid rgba(0,0,0,0.3);
+    border-radius: var(--radius-btn);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-bright);
+    background: #2c4a3a;
+    transition: background-color 120ms ease, transform 80ms ease, box-shadow 120ms ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+button:hover    { transform: translateY(-1px); box-shadow: 0 3px 6px rgba(0,0,0,0.4); }
+button:active   { transform: translateY(0);    box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+
+.btn-accent   { background: var(--accent);  color: #2a1e00; border-color: #8a7430; }
+.btn-accent:hover  { background: var(--accent-bright); }
+
+.btn-danger   { background: var(--danger);  border-color: #6b2828; }
+.btn-danger:hover  { background: var(--danger-bright); }
+
+.btn-primary  { background: var(--primary); border-color: #2c4d80; }
+.btn-primary:hover { background: var(--primary-bright); }
+
+.btn-success  { background: var(--success); border-color: #205830; }
+.btn-success:hover { background: var(--success-bright); }
+
+/* -------------------------------------------------------------------------
+   5. Overlay & modal
+   ------------------------------------------------------------------------- */
+/* All three of #menu-screen, #rules-screen, #end-screen carry .overlay.
+   #rules-screen and #end-screen have inline display:none in markup; JS toggles
+   inline display on every transition, so the rule below only applies to the
+   initially-visible #menu-screen (and to any overlay re-shown with flex). */
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 100;
+    padding: 24px;
+}
+
+.modal-box {
+    background: linear-gradient(to bottom, #1a4434 0%, var(--bg-panel) 100%);
+    border: 1px solid var(--bg-panel-edge);
+    border-radius: var(--radius-panel);
+    padding: 28px 32px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-panel);
+    color: var(--text-bright);
+    line-height: 1.5;
+}
+.modal-box h2 {
+    margin-top: 0;
+    color: var(--accent);
+    font-size: 22px;
+    letter-spacing: 0.3px;
+}
+.modal-box p { margin: 10px 0; font-size: 14px; color: var(--text-dim); }
+.modal-box p strong { color: var(--text-bright); }
+
+.text-center { text-align: center; }
+
+/* -------------------------------------------------------------------------
+   6. Menu-specific
+   ------------------------------------------------------------------------- */
+.difficulty-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    font-size: 14px;
+    color: var(--text-dim);
+}
+
+.difficulty-row select {
+    background: #0e2a1d;
+    color: var(--text-bright);
+    border: 1px solid var(--bg-panel-edge);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 110px;
+}
+
+#stats-display {
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------------------
+   7. Game board layout
+   ------------------------------------------------------------------------- */
+/* Hidden until startGame() / resumeGame() sets display to 'block'.
+   Children are absolutely positioned, so 'block' is fine here. */
+.game-container {
+    display: none;
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: calc(100vh - var(--header-h));
+    overflow: hidden;
+}
+
+/* -------------------------------------------------------------------------
+   8. Player areas
+   ------------------------------------------------------------------------- */
+.player-area {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+
+.player-area.south {
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    flex-direction: column;
+}
+
+.player-area.north {
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    flex-direction: column-reverse;   /* info below, hands above */
+}
+
+.player-area.west {
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-direction: row;
+    align-items: center;
+}
+
+.player-area.east {
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-direction: row-reverse;
+    align-items: center;
+}
+
+.player-info {
+    background: linear-gradient(to bottom, #1a4434, var(--bg-panel));
+    border: 1px solid var(--bg-panel-edge);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    white-space: nowrap;
+    transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+/* Selectable opponent during reveal phase */
+.player-info.selectable-player {
+    cursor: pointer;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(230,196,106,0.5);
+    animation: pulse-accent 1.2s ease-in-out infinite;
+}
+
+/* Active turn highlight */
+.player-info.active-turn {
+    border-color: var(--accent-bright);
+    box-shadow: 0 0 0 2px rgba(230,196,106,0.4), 0 0 16px rgba(230,196,106,0.55);
+}
+
+@keyframes pulse-accent {
+    0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(230,196,106,0.5); }
+    50%      { box-shadow: 0 0 0 3px var(--accent-bright), 0 2px 14px rgba(247,217,122,0.8); }
+}
+
+/* -------------------------------------------------------------------------
+   9. Hand containers
+   ------------------------------------------------------------------------- */
+.hand-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--card-h);
+    min-width: var(--card-w);
+}
+
+/* Horizontal hands (north/south): cards overlap to the right */
+.hand-container .card { margin-left: calc(var(--card-overlap) - var(--card-w)); }
+.hand-container .card:first-child { margin-left: 0; }
+
+/* Vertical hands (east/west) — toggled by ui.js for players 1 and 3 */
+.hand-container.vertical-hand {
+    flex-direction: column;
+    min-height: var(--card-h);
+}
+.hand-container.vertical-hand .card {
+    margin-left: 0;
+    margin-top: calc(var(--card-overlap-v) - var(--card-h));
+}
+.hand-container.vertical-hand .card:first-child { margin-top: 0; }
+
+/* -------------------------------------------------------------------------
+   10. Cards
+   ------------------------------------------------------------------------- */
+.card {
+    position: relative;
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: var(--radius-card);
+    background: var(--card-face);
+    border: 1px solid var(--card-face-edge);
+    box-shadow: var(--shadow-card);
+    color: var(--card-black);
+    font-family: "Georgia", "Times New Roman", serif;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+    overflow: hidden;
+}
+
+.card.red   { color: var(--card-red); }
+.card.black { color: var(--card-black); }
+
+.card .card-top {
+    position: absolute;
+    top: 4px;
+    left: 5px;
+    font-size: 11px;
+    line-height: 1.05;
+    text-align: left;
+    letter-spacing: -0.5px;
+}
+
+.card .card-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    line-height: 1;
+}
+
+.card .card-modifier {
+    position: absolute;
+    bottom: 3px;
+    right: 4px;
+    font-size: 7.5px;
+    font-weight: 700;
+    color: var(--card-shown-edge);
+    background: rgba(0,0,0,0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+    letter-spacing: 0.6px;
+    font-family: "Segoe UI", sans-serif;
+}
+
+/* Shown cards get a gold border so the value-mod is obvious at a glance */
+.card.shown {
+    border-color: var(--card-shown-edge);
+    box-shadow: 0 0 0 1px var(--card-shown-edge), var(--shadow-card);
+}
+
+/* Card backs: solid navy with a diagonal cross-hatch */
+.card.back {
+    background:
+        repeating-linear-gradient(45deg,
+            rgba(255,255,255,0.06) 0,
+            rgba(255,255,255,0.06) 4px,
+            transparent           4px,
+            transparent           8px),
+        linear-gradient(135deg, var(--card-back) 0%, var(--card-back-edge) 100%);
+    border-color: var(--card-back-edge);
+}
+
+/* Clickable cards lift on hover */
+.card.clickable {
+    cursor: grab;
+}
+.card.clickable:hover {
+    transform: translateY(-12px);
+    box-shadow: var(--shadow-card-hi);
+    z-index: 5;
+}
+.card.clickable:active { cursor: grabbing; }
+
+/* Reveal animation — JS swaps face-down → face-up at ~50% of the flip */
+.card.revealing {
+    animation: reveal-flip 600ms ease;
+    transform-style: preserve-3d;
+    z-index: 6;
+}
+@keyframes reveal-flip {
+    0%   { transform: rotateY(0deg)   scale(1);   }
+    50%  { transform: rotateY(90deg)  scale(1.05); }
+    100% { transform: rotateY(0deg)   scale(1);   }
+}
+
+/* -------------------------------------------------------------------------
+   11. Play zone
+   ------------------------------------------------------------------------- */
+.play-zone {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    height: 240px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows:    1fr 1fr 1fr;
+    border-radius: 16px;
+    background: rgba(0,0,0,0.18);
+    border: 2px dashed rgba(255,255,255,0.08);
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+/* HTML order: slot-2 (north), slot-1 (west), slot-3 (east), slot-0 (south).
+   Use explicit grid-area to place each one regardless of source order. */
+#play-slot-2 { grid-area: 1 / 2; }   /* North */
+#play-slot-1 { grid-area: 2 / 1; }   /* West  */
+#play-slot-3 { grid-area: 2 / 3; }   /* East  */
+#play-slot-0 { grid-area: 3 / 2; }   /* South */
+
+.play-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* Drag hints */
+.play-zone.active-drop {
+    border-color: var(--accent);
+    background: rgba(230,196,106,0.08);
+}
+.play-zone.drag-over {
+    border-color: var(--accent-bright);
+    background: rgba(230,196,106,0.18);
+    box-shadow: inset 0 0 24px rgba(230,196,106,0.25);
+}
+
+/* -------------------------------------------------------------------------
+   12. Prompt overlay (in-board message bar)
+   ------------------------------------------------------------------------- */
+#prompt-overlay {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: var(--accent);
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border: 1px solid rgba(230,196,106,0.4);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 40;
+    display: none;    /* JS toggles to 'block' via setPrompt() */
+    max-width: 80%;
+    text-align: center;
+}
+
+/* -------------------------------------------------------------------------
+   13. End screen
+   ------------------------------------------------------------------------- */
+#end-screen {
+    flex-direction: column;
+    color: var(--text-bright);
+    text-align: center;
+}
+
+#end-results {
+    font-size: 18px;
+    line-height: 1.8;
+    margin: 20px 0 30px 0;
+    color: var(--text-dim);
+}
+#end-results div { padding: 2px 0; }
+
+/* -------------------------------------------------------------------------
+   14. Responsive squeeze
+   ------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+    :root {
+        --card-w: 54px;
+        --card-h: 76px;
+        --card-overlap: 28px;
+        --card-overlap-v: 22px;
+    }
+    .play-zone { width: 270px; height: 200px; }
+    header .title { font-size: 16px; }
+}
+
+@media (max-height: 700px) {
+    :root {
+        --card-w: 52px;
+        --card-h: 74px;
+    }
+    .play-zone { width: 250px; height: 180px; }
+}
