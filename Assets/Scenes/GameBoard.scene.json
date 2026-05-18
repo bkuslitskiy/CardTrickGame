@@ -1,0 +1,177 @@
+{
+  "name": "GameBoard",
+  "type": "Scene",
+  "objects": [
+    {
+      "name": "GameManager",
+      "type": "GameObject",
+      "components": [
+        {
+          "name": "GameManagerController",
+          "properties": {}
+        }
+      ]
+    },
+    {
+      "name": "Canvas",
+      "type": "Canvas",
+      "components": [
+        {
+          "name": "CanvasScaler",
+          "properties": {
+            "referenceResolution": { "x": 1920, "y": 1080 }
+          }
+        },
+        {
+          "name": "UIManager",
+          "properties": {}
+        }
+      ],
+      "children": [
+        {
+          "name": "Background",
+          "type": "Image",
+          "properties": {
+            "color": { "r": 0, "g": 0.3, "b": 0, "a": 1 }
+          }
+        },
+        {
+          "name": "TopUI",
+          "type": "Panel",
+          "properties": {
+            "anchorMin": { "x": 0, "y": 0.9 },
+            "anchorMax": { "x": 1, "y": 1 }
+          },
+          "children": [
+            {
+              "name": "PhaseDisplay",
+              "type": "Text",
+              "properties": {
+                "text": "Phase: Setup",
+                "fontSize": 24,
+                "alignment": "MiddleLeft",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "RoundDisplay",
+              "type": "Text",
+              "properties": {
+                "text": "Round: 0 / 13",
+                "fontSize": 24,
+                "alignment": "MiddleCenter",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "name": "PlayZone",
+          "type": "Panel",
+          "properties": {
+            "anchorMin": { "x": 0.25, "y": 0.35 },
+            "anchorMax": { "x": 0.75, "y": 0.65 }
+          },
+          "description": "Central area where cards are played each round"
+        },
+        {
+          "name": "Player0Hand",
+          "type": "HandDisplay",
+          "properties": {
+            "playerId": 0,
+            "anchorMin": { "x": 0, "y": 0 },
+            "anchorMax": { "x": 1, "y": 0.2 }
+          }
+        },
+        {
+          "name": "Player1Hand",
+          "type": "HandDisplay",
+          "properties": {
+            "playerId": 1,
+            "anchorMin": { "x": 0, "y": 0.8 },
+            "anchorMax": { "x": 0.2, "y": 1 }
+          }
+        },
+        {
+          "name": "Player2Hand",
+          "type": "HandDisplay",
+          "properties": {
+            "playerId": 2,
+            "anchorMin": { "x": 0, "y": 0.8 },
+            "anchorMax": { "x": 1, "y": 1 }
+          }
+        },
+        {
+          "name": "Player3Hand",
+          "type": "HandDisplay",
+          "properties": {
+            "playerId": 3,
+            "anchorMin": { "x": 0.8, "y": 0.8 },
+            "anchorMax": { "x": 1, "y": 1 }
+          }
+        },
+        {
+          "name": "ScoresPanel",
+          "type": "Panel",
+          "properties": {
+            "anchorMin": { "x": 0.75, "y": 0.35 },
+            "anchorMax": { "x": 1, "y": 0.9 }
+          },
+          "children": [
+            {
+              "name": "ScoreTitle",
+              "type": "Text",
+              "properties": {
+                "text": "SCORES",
+                "fontSize": 20,
+                "fontStyle": "Bold",
+                "alignment": "MiddleCenter",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "Player0Score",
+              "type": "Text",
+              "properties": {
+                "text": "P1: 0",
+                "fontSize": 16,
+                "alignment": "MiddleLeft",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "Player1Score",
+              "type": "Text",
+              "properties": {
+                "text": "P2: 0",
+                "fontSize": 16,
+                "alignment": "MiddleLeft",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "Player2Score",
+              "type": "Text",
+              "properties": {
+                "text": "P3: 0",
+                "fontSize": 16,
+                "alignment": "MiddleLeft",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "Player3Score",
+              "type": "Text",
+              "properties": {
+                "text": "P4: 0",
+                "fontSize": 16,
+                "alignment": "MiddleLeft",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

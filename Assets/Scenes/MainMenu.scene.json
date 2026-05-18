@@ -1,0 +1,122 @@
+{
+  "name": "MainMenu",
+  "type": "Scene",
+  "objects": [
+    {
+      "name": "Canvas",
+      "type": "Canvas",
+      "components": [
+        {
+          "name": "CanvasScaler",
+          "properties": {
+            "referenceResolution": { "x": 1920, "y": 1080 }
+          }
+        }
+      ],
+      "children": [
+        {
+          "name": "Background",
+          "type": "Image",
+          "properties": {
+            "color": { "r": 0.1, "g": 0.1, "b": 0.2, "a": 1 }
+          }
+        },
+        {
+          "name": "TitlePanel",
+          "type": "Panel",
+          "children": [
+            {
+              "name": "Title",
+              "type": "Text",
+              "properties": {
+                "text": "TRICK-TAKING CARD GAME",
+                "font": "Arial",
+                "fontSize": 48,
+                "fontStyle": "Bold",
+                "alignment": "MiddleCenter",
+                "color": { "r": 1, "g": 1, "b": 1, "a": 1 }
+              }
+            },
+            {
+              "name": "Subtitle",
+              "type": "Text",
+              "properties": {
+                "text": "Select Difficulty",
+                "font": "Arial",
+                "fontSize": 32,
+                "alignment": "MiddleCenter",
+                "color": { "r": 0.8, "g": 0.8, "b": 0.8, "a": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ButtonPanel",
+          "type": "Panel",
+          "children": [
+            {
+              "name": "EasyButton",
+              "type": "Button",
+              "properties": {
+                "text": "ALL EASY",
+                "colors": {
+                  "normalColor": { "r": 0.2, "g": 0.8, "b": 0.2, "a": 1 },
+                  "hoverColor": { "r": 0.3, "g": 1, "b": 0.3, "a": 1 },
+                  "pressedColor": { "r": 0.1, "g": 0.6, "b": 0.1, "a": 1 }
+                }
+              }
+            },
+            {
+              "name": "MediumButton",
+              "type": "Button",
+              "properties": {
+                "text": "ALL MEDIUM",
+                "colors": {
+                  "normalColor": { "r": 0.8, "g": 0.8, "b": 0.2, "a": 1 },
+                  "hoverColor": { "r": 1, "g": 1, "b": 0.3, "a": 1 },
+                  "pressedColor": { "r": 0.6, "g": 0.6, "b": 0.1, "a": 1 }
+                }
+              }
+            },
+            {
+              "name": "HardButton",
+              "type": "Button",
+              "properties": {
+                "text": "ALL HARD",
+                "colors": {
+                  "normalColor": { "r": 0.8, "g": 0.2, "b": 0.2, "a": 1 },
+                  "hoverColor": { "r": 1, "g": 0.3, "b": 0.3, "a": 1 },
+                  "pressedColor": { "r": 0.6, "g": 0.1, "b": 0.1, "a": 1 }
+                }
+              }
+            },
+            {
+              "name": "MixedButton",
+              "type": "Button",
+              "properties": {
+                "text": "MIXED (Easy/Med/Hard/Easy)",
+                "colors": {
+                  "normalColor": { "r": 0.6, "g": 0.4, "b": 0.8, "a": 1 },
+                  "hoverColor": { "r": 0.8, "g": 0.6, "b": 1, "a": 1 },
+                  "pressedColor": { "r": 0.4, "g": 0.2, "b": 0.6, "a": 1 }
+                }
+              }
+            },
+            {
+              "name": "QuitButton",
+              "type": "Button",
+              "properties": {
+                "text": "QUIT",
+                "colors": {
+                  "normalColor": { "r": 0.4, "g": 0.4, "b": 0.4, "a": 1 },
+                  "hoverColor": { "r": 0.6, "g": 0.6, "b": 0.6, "a": 1 },
+                  "pressedColor": { "r": 0.2, "g": 0.2, "b": 0.2, "a": 1 }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trick-Taking Card Game</title>
+    <style>
+        :root {
+            --bg-color: #1e3d2f;
+            --text-light: #f0f0f0;
+            --accent: #ffd700;
+            --card-bg: #fff;
+            --card-back: #4a6fa5;
+            --shown-bg: #fffbf0;
+            --danger: #d9534f;
+            --success: #5cb85c;
+        }
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        header {
+            background-color: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        button {
+            background: var(--card-back); color: white;
+            border: none; padding: 8px 16px; border-radius: 4px;
+            cursor: pointer; font-size: 14px; font-weight: bold;
+        }
+        button:hover { background: #3a5a8a; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        
+        /* Menu Styles */
+        #menu-screen {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 100;
+        }
+        .menu-box {
+            background: #2c4c3b; padding: 30px; border-radius: 8px;
+            text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .difficulty-row { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; width: 300px; }
+        select { padding: 5px; border-radius: 4px; background: #fff; color: #000; }
+
+        /* Game Board Styles */
+        #game-board {
+            flex: 1; position: relative; display: none;
+        }
+        .player-area { position: absolute; display: flex; flex-direction: column; align-items: center; }
+        #area-0 { bottom: 20px; left: 50%; transform: translateX(-50%); } /* South / Human */
+        #area-1 { left: 20px; top: 50%; transform: translateY(-50%); } /* West */
+        #area-2 { top: 20px; left: 50%; transform: translateX(-50%); } /* North */
+        #area-3 { right: 20px; top: 50%; transform: translateY(-50%); } /* East */
+
+        .player-info { background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 4px; margin-bottom: 5px; text-align: center; }
+        .hand-container { display: flex; gap: 10px; margin: 5px; }
+        
+        /* Cards */
+        .card {
+            width: 60px; height: 90px; background: var(--card-bg); color: black;
+            border-radius: 6px; position: relative; cursor: default;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3); user-select: none;
+            display: flex; flex-direction: column;
+        }
+        .card.red { color: #d9534f; }
+        .card.black { color: #222; }
+        .card.back { background: var(--card-back); border: 2px solid #fff; }
+        .card.shown { background: var(--shown-bg); border: 2px solid var(--accent); }
+        .card.clickable { cursor: pointer; transition: transform 0.1s; }
+        .card.clickable:hover { transform: translateY(-10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        
+        .card-top { position: absolute; top: 5px; left: 5px; font-weight: bold; font-size: 16px; line-height: 1; }
+        .card-center { margin: auto; font-size: 24px; }
+        .card-modifier { position: absolute; bottom: 5px; width: 100%; text-align: center; font-size: 10px; font-weight: bold; color: #4a6fa5; }
+
+        /* Play Zone */
+        #play-zone {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 300px; height: 300px; border-radius: 50%; background: rgba(0,0,0,0.1);
+        }
+        .play-slot { position: absolute; width: 60px; height: 90px; }
+        #play-slot-0 { bottom: 10px; left: 50%; transform: translateX(-50%); }
+        #play-slot-1 { left: 10px; top: 50%; transform: translateY(-50%); }
+        #play-slot-2 { top: 10px; left: 50%; transform: translateX(-50%); }
+        #play-slot-3 { right: 10px; top: 50%; transform: translateY(-50%); }
+
+        /* Overlays & Prompts */
+        #prompt-overlay {
+            position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 8px;
+            font-size: 18px; font-weight: bold; z-index: 50; display: none; text-align: center;
+        }
+        .selectable-player { cursor: pointer; border: 2px solid #5cb85c; box-shadow: 0 0 10px #5cb85c; }
+        
+        /* End Game */
+        #end-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 200; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; display: none;
+        }
+        #end-results { font-size: 24px; margin-bottom: 30px; text-align: center; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div style="font-size: 20px; font-weight: bold;">Trick-Taking Card Game</div>
+        <div id="status-text">Phase: Setup | Round: 1/13</div>
+        <div>
+            <button onclick="showRules()" style="margin-right: 10px; background: var(--accent); color: black;">Rules</button>
+            <button onclick="showMenu()">Abandon Game</button>
+        </div>
+    </header>
+
+    <!-- Rules Screen -->
+    <div id="rules-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 300; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="background: #2c4c3b; padding: 30px; border-radius: 8px; max-width: 800px; width: 90%; max-height: 80%; overflow-y: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+            <h2 style="color: var(--accent); margin-top: 0;">Game Rules</h2>
+            <p><strong>Basic rules:</strong><br>
+            Four players, trick taking game.<br>
+            Each player has a hand comprised of two sections, the Hidden and the Shown.<br>
+            Only a player can see their Hidden hand. All Shown hands are visible to all players.</p>
+
+            <p><strong>Cards played from the Hidden hand are scored as follows during the play:</strong><br>
+            2-10: face value<br>
+            J: 11, Q: 12, K: 13, A: 14</p>
+
+            <p><strong>Cards played from the Shown hand are scored as follows during the play:</strong><br>
+            2-10: face value + 2<br>
+            J: 13, Q: 14, K: 5, A: 10</p>
+
+            <p>All cards are scored at face value (J=11, Q=12, K=13, A=14) during the final tally.</p>
+
+            <p><strong>Play is as follows:</strong><br>
+            Each player is dealt 13 cards from a standard 52 card deck into their Hidden hand.<br>
+            Each round proceeds as follows:<br>
+            - <strong>Reveal:</strong> The leader chooses another player. A random card from that player's Hidden hand is placed face up into that player's Shown hand.<br>
+            - <strong>Play:</strong> Players take turns placing a card from their hand (Hidden or Shown) into the Play zone, starting with the leader.<br>
+            - <strong>Determination:</strong> Whoever has the highest scoring card in the Play zone wins the round. They discard the card they played, take the remaining card with the highest face value as a prize, and discard the rest.</p>
+            
+            <p><strong>Edge Cases & Tie Breaking:</strong><br>
+            - If two cards tie in play score, those cards are discarded before choosing a winner. This applies to <em>any</em> two cards that tie in score, even if they aren't the highest.<br>
+            - If three or four cards tie in play score, all cards are discarded and nobody wins.<br>
+            - If potential prize cards tie in face value, they are also discarded and the next highest is taken.<br>
+            - The leader for the next round is the player counter-clockwise from the previous trick's winner. If there was no winner, the leader does not change.<br>
+            - You must choose a player with cards in their Hidden hand to reveal a card. If all players are out of Hidden cards, no cards are revealed that round.</p>
+
+            <button onclick="hideRules()" style="margin-top: 20px; font-size: 16px; padding: 10px 20px; background: var(--danger);">Close Rules</button>
+        </div>
+    </div>
+
+    <!-- Menu Screen -->
+    <div id="menu-screen">
+        <div class="menu-box">
+            <h2>Game Setup</h2>
+            <div class="difficulty-row">
+                <span>West Opponent:</span>
+                <select id="diff-1">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium" selected>Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+            <div class="difficulty-row">
+                <span>North Opponent:</span>
+                <select id="diff-2">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard" selected>Hard</option>
+                </select>
+            </div>
+            <div class="difficulty-row">
+                <span>East Opponent:</span>
+                <select id="diff-3">
+                    <option value="Easy" selected>Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+            <button onclick="startGame()" style="margin-top: 20px; font-size: 16px; padding: 10px 20px; background: var(--success);">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <div id="game-board">
+        <div id="prompt-overlay"></div>
+        
+        <!-- Play Zone -->
+        <div id="play-zone">
+            <div id="play-slot-2" class="play-slot"></div>
+            <div id="play-slot-1" class="play-slot"></div>
+            <div id="play-slot-3" class="play-slot"></div>
+            <div id="play-slot-0" class="play-slot"></div>
+        </div>
+
+        <!-- Players -->
+        <div id="area-2" class="player-area">
+            <div class="player-info" id="info-2">North (AI) | Score: 0</div>
+            <div class="hand-container" id="hidden-2"></div>
+            <div class="hand-container" id="shown-2"></div>
+        </div>
+        <div id="area-1" class="player-area">
+            <div class="player-info" id="info-1">West (AI) | Score: 0</div>
+            <div class="hand-container" id="hidden-1"></div>
+            <div class="hand-container" id="shown-1"></div>
+        </div>
+        <div id="area-3" class="player-area">
+            <div class="player-info" id="info-3">East (AI) | Score: 0</div>
+            <div class="hand-container" id="hidden-3"></div>
+            <div class="hand-container" id="shown-3"></div>
+        </div>
+        <div id="area-0" class="player-area">
+            <div class="hand-container" id="shown-0"></div>
+            <div class="hand-container" id="hidden-0"></div>
+            <div class="player-info" id="info-0" style="margin-top:5px;">South (You) | Score: 0</div>
+        </div>
+    </div>
+
+    <!-- End Screen -->
+    <div id="end-screen">
+        <h1 style="color: var(--accent); font-size: 48px; margin-bottom: 10px;">Game Over</h1>
+        <div id="end-results"></div>
+        <button onclick="showMenu()" style="font-size: 20px; padding: 10px 30px;">Return to Menu</button>
+    </div>
+
+    <script>
+        // --- Core Definitions ---
+        const Suits = { CLUBS: '♣', DIAMONDS: '♦', HEARTS: '♥', SPADES: '♠' };
+        const Ranks = { 
+            2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 
+            11: 'J', 12: 'Q', 13: 'K', 14: 'A' 
+        };
+        
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        class Card {
+            constructor(suit, rank) {
+                this.suit = suit;
+                this.rank = rank; // integer 2-14
+            }
+            get faceValue() { return this.rank; }
+            get hiddenScore() { return this.rank; }
+            get shownScore() {
+                if (this.rank >= 2 && this.rank <= 10) return this.rank + 2;
+                if (this.rank === 11) return 13;
+                if (this.rank === 12) return 14;
+                if (this.rank === 13) return 5;
+                if (this.rank === 14) return 10;
+                return 0;
+            }
+            get colorClass() { return (this.suit === Suits.HEARTS || this.suit === Suits.DIAMONDS) ? 'red' : 'black'; }
+            get name() { return `${Ranks[this.rank]}${this.suit}`; }
+        }
+
+        class Deck {
+            constructor() {
+                this.cards = [];
+                Object.values(Suits).forEach(suit => {
+                    Object.keys(Ranks).forEach(rank => {
+                        this.cards.push(new Card(suit, parseInt(rank)));
+                    });
+                });
+                this.shuffle();
+            }
+            shuffle() {
+                for (let i = this.cards.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
+                }
+            }
+            deal(count) { return this.cards.splice(0, count); }
+        }
+
+        class Player {
+            constructor(id, name, isHuman, difficulty = 'Easy') {
+                this.id = id;
+                this.name = name;
+                this.isHuman = isHuman;
+                this.difficulty = difficulty;
+                this.hiddenHand = [];
+                this.shownHand = [];
+                this.scoringZone = [];
+            }
+            get score() { return this.scoringZone.reduce((sum, c) => sum + c.faceValue, 0); }
+            get hasHidden() { return this.hiddenHand.length > 0; }
+            removeCard(card) {
+                let idx = this.hiddenHand.indexOf(card);
+                if (idx > -1) { this.hiddenHand.splice(idx, 1); return 'Hidden'; }
+                idx = this.shownHand.indexOf(card);
+                if (idx > -1) { this.shownHand.splice(idx, 1); return 'Shown'; }
+                return null;
+            }
+        }
+
+        // --- Game State & Engine ---
+        let gameState = {
+            players: [],
+            round: 1,
+            phase: '',
+            starterId: 0,
+            playZone: [], // { card, player, section }
+            discards: [],
+            isRunning: false,
+            resolveInput: null // For capturing human clicks
+        };
+
+        function showMenu() {
+            gameState.isRunning = false;
+            if(gameState.resolveInput) { gameState.resolveInput(null); gameState.resolveInput = null; }
+            document.getElementById('menu-screen').style.display = 'flex';
+            document.getElementById('game-board').style.display = 'none';
+            document.getElementById('end-screen').style.display = 'none';
+        }
+
+        function showRules() {
+            document.getElementById('rules-screen').style.display = 'flex';
+        }
+        
+        function hideRules() {
+            document.getElementById('rules-screen').style.display = 'none';
+        }
+
+        async function startGame() {
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('end-screen').style.display = 'none';
+            document.getElementById('game-board').style.display = 'block';
+
+            let diffs = [
+                'Human',
+                document.getElementById('diff-1').value,
+                document.getElementById('diff-2').value,
+                document.getElementById('diff-3').value
+            ];
+
+            gameState = {
+                players: [
+                    new Player(0, 'South', true),
+                    new Player(1, 'West', false, diffs[1]),
+                    new Player(2, 'North', false, diffs[2]),
+                    new Player(3, 'East', false, diffs[3])
+                ],
+                round: 1,
+                phase: 'Reveal',
+                starterId: 0,
+                playZone: [],
+                discards: [],
+                isRunning: true,
+                resolveInput: null
+            };
+
+            let deck = new Deck();
+            gameState.players.forEach(p => p.hiddenHand = deck.deal(13));
+
+            renderAll();
+            await gameLoop();
+        }
+
+        async function gameLoop() {
+            while (gameState.isRunning && gameState.round <= 13) {
+                if (gameState.phase === 'Reveal') await executeRevealPhase();
+                else if (gameState.phase === 'Play') await executePlayPhase();
+                else if (gameState.phase === 'Determine') await executeDeterminePhase();
+                else if (gameState.phase === 'Score') executeScorePhase();
+            }
+            if (gameState.isRunning) endGame();
+        }
+
+        function updateStatus(text) {
+            document.getElementById('status-text').innerText = text;
+        }
+
+        function setPrompt(text) {
+            const p = document.getElementById('prompt-overlay');
+            if(text) { p.innerText = text; p.style.display = 'block'; }
+            else p.style.display = 'none';
+        }
+
+        // --- Phases ---
+        async function executeRevealPhase() {
+            updateStatus(`Phase: Reveal | Round: ${gameState.round}/13`);
+            let starter = gameState.players[gameState.starterId];
+            let validTargets = gameState.players.filter(p => p.id !== starter.id && p.hasHidden);
+
+            if (validTargets.length > 0) {
+                let targetId = -1;
+                if (starter.isHuman) {
+                    targetId = await requestHumanRevealTarget(validTargets);
+                    if(!gameState.isRunning) return; // aborted
+                } else {
+                    targetId = selectAITarget(starter, validTargets);
+                    await delay(600); // UI breathing room
+                }
+
+                let targetPlayer = gameState.players.find(p => p.id === targetId);
+                // Randomly pick a card from their hidden hand (indistinguishable)
+                let rIndex = Math.floor(Math.random() * targetPlayer.hiddenHand.length);
+                let card = targetPlayer.hiddenHand.splice(rIndex, 1)[0];
+                targetPlayer.shownHand.push(card);
+                renderAll();
+            }
+
+            gameState.phase = 'Play';
+        }
+
+        async function executePlayPhase() {
+            updateStatus(`Phase: Play | Round: ${gameState.round}/13`);
+            
+            let playOrder = [];
+            for(let i=0; i<4; i++) playOrder.push(gameState.players[(gameState.starterId + i) % 4]);
+
+            for(let i=0; i<4; i++) {
+                if(!gameState.isRunning) return;
+                let currentPlayer = playOrder[i];
+                let validCards = [...currentPlayer.hiddenHand, ...currentPlayer.shownHand];
+                if (validCards.length === 0) continue;
+
+                let playedCard = null;
+                if (currentPlayer.isHuman) {
+                    playedCard = await requestHumanCardPlay(currentPlayer);
+                    if(!gameState.isRunning) return;
+                } else {
+                    playedCard = selectAICardToPlay(currentPlayer, validCards);
+                    await delay(800);
+                }
+
+                let section = currentPlayer.removeCard(playedCard);
+                gameState.playZone.push({ card: playedCard, player: currentPlayer, section: section });
+                renderAll();
+            }
+
+            await delay(500);
+            gameState.phase = 'Determine';
+        }
+
+        async function executeDeterminePhase() {
+            updateStatus(`Phase: Determine | Round: ${gameState.round}/13`);
+            
+            let { winner, prizeCard } = determineTrickWinner();
+
+            if (winner && prizeCard) {
+                winner.scoringZone.push(prizeCard);
+                gameState.starterId = winner.id; 
+                setPrompt(`${winner.name} wins the trick and claims ${prizeCard.name}!`);
+            } else {
+                // No winner or no prize available due to ties
+                setPrompt(`Tie! No one wins the trick.`);
+            }
+            
+            renderAll();
+            
+            // Await acknowledge
+            await new Promise(resolve => {
+                gameState.resolveInput = resolve;
+                document.addEventListener('click', function ack() {
+                    document.removeEventListener('click', ack);
+                    if(gameState.resolveInput) { gameState.resolveInput(); gameState.resolveInput = null; }
+                }, { once: true });
+            });
+
+            if(!gameState.isRunning) return;
+            setPrompt(null);
+            
+            gameState.playZone.forEach(p => {
+                if(p.card !== prizeCard) gameState.discards.push(p.card);
+            });
+            gameState.playZone = [];
+            renderAll();
+
+            gameState.phase = 'Score';
+        }
+
+        function executeScorePhase() {
+            // Tally score is automatic via getters. Just advance round.
+            gameState.round++;
+            // Next round leader is player clockwise from previous winner (handled by starterId assignment)
+            // Wait, rules state "clockwise from previous winner, so winner goes second."
+            // If Play order is 0->1->2->3, and 1 won, then 1 should go second.
+            // Therefore starter should be 0. (Winner - 1).
+            // Let's implement this strictly:
+            let lastWinnerId = gameState.starterId; // it was updated in determine
+            gameState.starterId = (lastWinnerId + 3) % 4; // (winner - 1) wrapping around
+
+            gameState.phase = 'Reveal';
+        }
+
+        function endGame() {
+            gameState.isRunning = false;
+            let resultsHTML = '';
+            let maxScore = -1; let winner = null;
+            
+            gameState.players.forEach(p => {
+                if(p.score > maxScore) { maxScore = p.score; winner = p; }
+                resultsHTML += `<div>${p.name}: ${p.score} pts</div>`;
+            });
+            
+            resultsHTML = `<div style="font-size:32px; font-weight:bold; color:var(--accent); margin-bottom:20px;">WINNER: ${winner.name}</div>` + resultsHTML;
+            document.getElementById('end-results').innerHTML = resultsHTML;
+            document.getElementById('end-screen').style.display = 'flex';
+        }
+
+        // --- Core Rules Logic ---
+        function determineTrickWinner() {
+            let cards = [...gameState.playZone]; // copy
+            
+            // Helper to get play score
+            const getScore = (play) => play.section === 'Hidden' ? play.card.hiddenScore : play.card.shownScore;
+            
+            while(cards.length > 0) {
+                let maxScore = Math.max(...cards.map(getScore));
+                let winners = cards.filter(c => getScore(c) === maxScore);
+                
+                if (winners.length === 1) {
+                    let winnerPlay = winners[0];
+                    gameState.discards.push(winnerPlay.card);
+                    cards = cards.filter(c => c !== winnerPlay); // remove winner's card
+                    
+                    // Resolve prize from remainder
+                    let prize = resolvePrizeCard(cards);
+                    return { winner: winnerPlay.player, prizeCard: prize };
+                } 
+                else if (winners.length === 2) {
+                    // Discard ties and rescore
+                    winners.forEach(w => {
+                        gameState.discards.push(w.card);
+                        cards = cards.filter(c => c !== w);
+                    });
+                } 
+                else {
+                    // 3 or 4 ties -> discard all, no winner
+                    cards.forEach(c => gameState.discards.push(c.card));
+                    return { winner: null, prizeCard: null };
+                }
+            }
+            return { winner: null, prizeCard: null };
+        }
+
+        function resolvePrizeCard(remainingPlays) {
+            let cards = [...remainingPlays];
+            while(cards.length > 0) {
+                let maxFace = Math.max(...cards.map(c => c.card.faceValue));
+                let ties = cards.filter(c => c.card.faceValue === maxFace);
+                
+                if (ties.length === 1) {
+                    let prize = ties[0].card;
+                    // discard leftovers
+                    cards.filter(c => c !== ties[0]).forEach(c => gameState.discards.push(c.card));
+                    return prize;
+                } else {
+                    // tied prizes get discarded
+                    ties.forEach(t => {
+                        gameState.discards.push(t.card);
+                        cards = cards.filter(c => c !== t);
+                    });
+                }
+            }
+            return null;
+        }
+
+        // --- Human Input Wrappers ---
+        function requestHumanRevealTarget(validTargets) {
+            return new Promise(resolve => {
+                setPrompt("Choose an opponent to reveal a card from.");
+                gameState.resolveInput = resolve;
+                
+                validTargets.forEach(target => {
+                    let infoDiv = document.getElementById(`info-${target.id}`);
+                    infoDiv.classList.add('selectable-player');
+                    infoDiv.onclick = () => {
+                        // Cleanup
+                        validTargets.forEach(t => {
+                            let el = document.getElementById(`info-${t.id}`);
+                            el.classList.remove('selectable-player');
+                            el.onclick = null;
+                        });
+                        setPrompt(null);
+                        let r = gameState.resolveInput;
+                        gameState.resolveInput = null;
+                        if(r) r(target.id);
+                    };
+                });
+            });
+        }
+
+        function requestHumanCardPlay(player) {
+            return new Promise(resolve => {
+                setPrompt("Select a card to play.");
+                gameState.resolveInput = resolve;
+                
+                // Re-render specifically to attach click events
+                renderHand(player, true, (card) => {
+                    renderHand(player, false, null); // remove interactivity
+                    setPrompt(null);
+                    let r = gameState.resolveInput;
+                    gameState.resolveInput = null;
+                    if(r) r(card);
+                });
+            });
+        }
+
+        // --- AI Logic ---
+        function selectAITarget(aiPlayer, validTargets) {
+            if(aiPlayer.difficulty === 'Easy') {
+                return validTargets[Math.floor(Math.random() * validTargets.length)].id;
+            } else if (aiPlayer.difficulty === 'Medium') {
+                // Fewest hidden cards
+                validTargets.sort((a,b) => a.hiddenHand.length - b.hiddenHand.length);
+                return validTargets[0].id;
+            } else { // Hard
+                // Highest score
+                validTargets.sort((a,b) => b.score - a.score);
+                return validTargets[0].id;
+            }
+        }
+
+        function selectAICardToPlay(aiPlayer, validCards) {
+            if(aiPlayer.difficulty === 'Easy') {
+                return validCards[Math.floor(Math.random() * validCards.length)];
+            } else if (aiPlayer.difficulty === 'Medium') {
+                // Highest scoring card
+                const getScore = (c) => aiPlayer.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore;
+                validCards.sort((a,b) => getScore(b) - getScore(a));
+                return validCards[0];
+            } else { // Hard
+                const getScore = (c) => aiPlayer.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore;
+                if (gameState.playZone.length === 0) {
+                    // Leading: 2nd highest face value to bait
+                    let sorted = [...validCards].sort((a,b) => b.faceValue - a.faceValue);
+                    return sorted.length > 1 ? sorted[1] : sorted[0];
+                } else {
+                    // Following
+                    let maxInPlay = Math.max(...gameState.playZone.map(p => p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore));
+                    let winningCards = validCards.filter(c => getScore(c) > maxInPlay);
+                    if (winningCards.length > 0) {
+                        // lowest winning card
+                        winningCards.sort((a,b) => a.faceValue - b.faceValue);
+                        return winningCards[0];
+                    }
+                    // throw away absolute lowest face value
+                    let sorted = [...validCards].sort((a,b) => a.faceValue - b.faceValue);
+                    return sorted[0];
+                }
+            }
+        }
+
+        // --- UI Rendering ---
+        function renderAll() {
+            gameState.players.forEach(p => {
+                document.getElementById(`info-${p.id}`).innerText = `${p.name} | Score: ${p.score}`;
+                renderHand(p, false, null);
+            });
+            renderPlayZone();
+        }
+
+        function renderHand(player, isInteractive, clickCallback) {
+            let hiddenDiv = document.getElementById(`hidden-${player.id}`);
+            let shownDiv = document.getElementById(`shown-${player.id}`);
+            hiddenDiv.innerHTML = '';
+            shownDiv.innerHTML = '';
+
+            // Hidden Cards
+            player.hiddenHand.sort((a,b) => b.faceValue - a.faceValue);
+            player.hiddenHand.forEach(c => {
+                let el = document.createElement('div');
+                if (player.isHuman) {
+                    el.className = `card ${c.colorClass} ${isInteractive ? 'clickable' : ''}`;
+                    el.innerHTML = `
+                        <div class="card-top">${Ranks[c.rank]}<br>${c.suit}</div>
+                        <div class="card-center">${c.suit}</div>
+                    `;
+                    if (isInteractive) el.onclick = () => clickCallback(c);
+                } else {
+                    el.className = 'card back';
+                }
+                // Compact styling for hands
+                el.style.marginRight = '-30px'; 
+                hiddenDiv.appendChild(el);
+            });
+            if(hiddenDiv.lastChild) hiddenDiv.lastChild.style.marginRight = '0';
+
+            // Shown Cards
+            player.shownHand.sort((a,b) => b.faceValue - a.faceValue);
+            player.shownHand.forEach(c => {
+                let el = document.createElement('div');
+                el.className = `card shown ${c.colorClass} ${isInteractive ? 'clickable' : ''}`;
+                el.innerHTML = `
+                    <div class="card-top">${Ranks[c.rank]}<br>${c.suit}</div>
+                    <div class="card-center">${c.suit}</div>
+                    <div class="card-modifier">SHOWN</div>
+                `;
+                if (isInteractive) el.onclick = () => clickCallback(c);
+                el.style.marginRight = '-30px';
+                shownDiv.appendChild(el);
+            });
+            if(shownDiv.lastChild) shownDiv.lastChild.style.marginRight = '0';
+        }
+
+        function renderPlayZone() {
+            for(let i=0; i<4; i++) {
+                let slot = document.getElementById(`play-slot-${i}`);
+                slot.innerHTML = '';
+            }
+            gameState.playZone.forEach(play => {
+                let slot = document.getElementById(`play-slot-${play.player.id}`);
+                let c = play.card;
+                let el = document.createElement('div');
+                el.className = `card ${play.section === 'Shown' ? 'shown' : ''} ${c.colorClass}`;
+                el.style.position = 'absolute';
+                el.innerHTML = `
+                    <div class="card-top">${Ranks[c.rank]}<br>${c.suit}</div>
+                    <div class="card-center">${c.suit}</div>
+                    ${play.section === 'Shown' ? '<div class="card-modifier">SHOWN</div>' : ''}
+                `;
+                slot.appendChild(el);
+            });
+        }
+
+    </script>
+</body>
+</html>

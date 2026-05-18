@@ -1,0 +1,19 @@
+{
+  "name": "card-game-webapp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser-based trick-taking card game. Companion test suite for the JS rewrite.",
+  "scripts": {
+    "serve": "node tools/static-server.js",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:engine": "playwright test tests/engine.spec.js",
+    "test:menu": "playwright test tests/menu.spec.js",
+    "test:gameplay": "playwright test tests/gameplay.spec.js",
+    "test:persistence": "playwright test tests/persistence.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}

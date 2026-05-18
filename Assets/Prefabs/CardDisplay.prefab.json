@@ -1,0 +1,60 @@
+{
+  "guid": "card-display-prefab-001",
+  "name": "CardDisplay",
+  "type": "Prefab",
+  "components": [
+    {
+      "name": "RectTransform",
+      "properties": {
+        "width": 60,
+        "height": 90,
+        "anchorMin": { "x": 0, "y": 0 },
+        "anchorMax": { "x": 0, "y": 0 }
+      }
+    },
+    {
+      "name": "Image",
+      "properties": {
+        "color": { "r": 1, "g": 1, "b": 1, "a": 1 },
+        "raycastTarget": true
+      }
+    },
+    {
+      "name": "Button",
+      "properties": {
+        "interactable": false
+      }
+    },
+    {
+      "name": "CardDisplay",
+      "properties": {
+        "hiddenCardColor": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 }
+      },
+      "children": [
+        {
+          "name": "RankText",
+          "type": "Text",
+          "properties": {
+            "text": "A",
+            "font": "Arial",
+            "fontSize": 24,
+            "fontStyle": "Bold",
+            "alignment": "UpperLeft",
+            "color": { "r": 0, "g": 0, "b": 0, "a": 1 }
+          }
+        },
+        {
+          "name": "SuitText",
+          "type": "Text",
+          "properties": {
+            "text": "♠",
+            "font": "Arial",
+            "fontSize": 20,
+            "alignment": "LowerRight",
+            "color": { "r": 1, "g": 0, "b": 0, "a": 1 }
+          }
+        }
+      ]
+    }
+  ]
+}

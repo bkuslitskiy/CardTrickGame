@@ -1,0 +1,53 @@
+Basic rules:
+Four players, trick taking game.
+Each player has a hand comprised of two sections, the Hidden and the Shown.
+	Only a player can see their Hidden hand. All Shown hands are visible to all players.
+
+
+Cards played from the Hidden hand have a Value during play of:
+2-10, face value.
+J, 11
+Q, 12
+K, 13
+A, 14
+
+Cards played from the Shown hand have a Value during play of:
+2-10, face value + 2.
+J, 13
+Q, 14
+K, 5
+A, 10
+
+All cards have a Score equal to their face value (J11, Q12, K13, A14) for prizes and the final tally.
+
+
+
+Play is as follows:
+
+Each player is dealt 13 cards from a standard 52 card deck into their Hidden hand.
+
+Each round proceeds as follows:
+	Reveal:
+		Player 1 chooses another player. A random card from that player's Hidden hand is then chosen and placed face up into that player's Shown hand.
+	Play:
+		Player 1 places a card from their hand (Hidden or Shown) into the Play zone, starting the play.
+		Player 2 places a card from their hand (Hidden or Shown) into the Play zone.
+		Player 3 places a card from their hand (Hidden or Shown) into the Play zone.
+		Player 4 places a card from their hand (Hidden or Shown) into the Play zone.
+	Determination:
+		Whoever has the highest scoring card in the Play zone wins the round and does the following:
+			Discards the card they played.
+			Takes the remaining card with the highest face value and puts it into their scoring zone. If two or more remaining cards tie for the highest face value, they are discarded and the next highest is taken.
+			Discards the remaining two cards.
+		If two cards tie, those cards are discarded before choosing a winner. This applies to any two cards that tie in score, even if they aren't the highest.
+		If three cards tie, all cards are discarded and nobody wins.
+
+Each round is lead by the player to the right of the previous round's winner. If you're doing it correctly, the previous winner should be second to go in this round.
+
+Each player tallies up the cards they won, highest score wins.
+
+
+Edge cases:
+	You must choose a player with cards in their Hidden hand to reveal a card.
+		If a player has no Hidden cards left, you must choose a different player.
+			If all players are out of Hidden cards, no cards are revealed that round.

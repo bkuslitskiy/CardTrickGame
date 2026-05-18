@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trick-Taking Card Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="game-wrapper">
+    <header>
+        <div class="title">Trick-Taking Card Game</div>
+        <div id="status-text">Phase: Setup | Round: 1/13</div>
+        <div>
+            <button onclick="showRules()" class="btn-accent" style="margin-right: 10px;">Rules</button>
+            <button onclick="showMenu()" class="btn-danger">Abandon Game</button>
+        </div>
+    </header>
+
+    <div id="rules-screen" style="display: none;" class="overlay">
+        <div class="modal-box">
+            <h2 style="color: var(--accent); margin-top: 0;">Game Rules</h2>
+            <p><strong>Basic rules:</strong><br>
+            Four players, trick taking game.<br>
+            Each player has a hand comprised of two sections, the Hidden and the Shown.<br>
+            Only a player can see their Hidden hand. All Shown hands are visible to all players.</p>
+
+            <p><strong>Cards played from the Hidden hand have a Value during play of:</strong><br>
+            2-10: face value<br>
+            J: 11, Q: 12, K: 13, A: 14</p>
+
+            <p><strong>Cards played from the Shown hand have a Value during play of:</strong><br>
+            2-10: face value + 2<br>
+            J: 13, Q: 14, K: 5, A: 10</p>
+
+            <p>All cards have a Score equal to their face value: 2-10, J11, Q12, K13, A14 during the final tally.</p>
+
+            <p><strong>Play is as follows:</strong><br>
+            Each player is dealt 13 cards from a standard 52 card deck into their Hidden hand.<br>
+            Each round proceeds as follows:<br>
+            - <strong>Reveal:</strong> The leader chooses another player. A random card from that player's Hidden hand is placed face up into that player's Shown hand.<br>
+            - <strong>Play:</strong> Players take turns placing a card from their hand (Hidden or Shown) into the Play zone, starting with the leader.<br>
+            - <strong>Determination:</strong> Discard cards with tied Values. Rank remaining cards by Value. Highest Value card's player wins the round. Discard winner's card. Rank remaining cards by Score. Highest remaining scoring card is this round's prize.<br>
+            - <strong>Next Round:</strong> The leader for the next round is the player counter-clockwise from the previous round's winner. If there was no winner, the leader does not change.</p>
+            
+            <p><strong>Edge Cases & Tie Breaking:</strong><br>
+            - If potential prize cards tie in Score, they are discarded and the next highest is taken.<br>
+            - You must choose a player with cards in their Hidden hand to reveal a card. If all players are out of Hidden cards, no cards are revealed that round.</p>
+            <button onclick="hideRules()" class="btn-danger" style="margin-top: 15px;">Close Rules</button>
+        </div>
+    </div>
+
+    <div id="menu-screen" class="overlay">
+        <div class="modal-box text-center">
+            <h2>Game Setup</h2>
+            <div id="stats-display" style="margin-bottom: 15px; color: var(--accent); font-size: 14px;"></div>
+            <div class="difficulty-row"><span>West Opponent:</span><select id="diff-1"><option value="Easy">Easy</option><option value="Medium" selected>Medium</option><option value="Hard">Hard</option></select></div>
+            <div class="difficulty-row"><span>North Opponent:</span><select id="diff-2"><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard" selected>Hard</option></select></div>
+            <div class="difficulty-row"><span>East Opponent:</span><select id="diff-3"><option value="Easy" selected>Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select></div>
+            
+            <button onclick="startGame()" class="btn-success" style="margin-top: 20px; font-size: 16px; padding: 10px 20px;">Start New Game</button>
+            <br>
+            <button id="resume-btn" onclick="resumeGame()" class="btn-primary" style="display: none; margin-top: 15px; font-size: 16px; padding: 10px 20px;">Resume Saved Game</button>
+        </div>
+    </div>
+
+    <div id="game-board" class="game-container">
+        <div id="prompt-overlay"></div>
+        
+        <div id="play-zone" class="play-zone">
+            <div id="play-slot-2" class="play-slot"></div>
+            <div id="play-slot-1" class="play-slot"></div>
+            <div id="play-slot-3" class="play-slot"></div>
+            <div id="play-slot-0" class="play-slot"></div>
+        </div>
+
+        <div id="area-2" class="player-area north"><div class="player-info" id="info-2">North (AI)</div><div class="hand-container" id="hidden-2"></div><div class="hand-container" id="shown-2"></div></div>
+        <div id="area-1" class="player-area west"><div class="player-info" id="info-1">West (AI)</div><div class="hand-container" id="hidden-1"></div><div class="hand-container" id="shown-1"></div></div>
+        <div id="area-3" class="player-area east"><div class="player-info" id="info-3">East (AI)</div><div class="hand-container" id="hidden-3"></div><div class="hand-container" id="shown-3"></div></div>
+        <div id="area-0" class="player-area south"><div class="player-info" id="info-0">South (You)</div><div class="hand-container" id="shown-0"></div><div class="hand-container" id="hidden-0"></div></div>
+    </div>
+
+    <div id="end-screen" style="display: none;" class="overlay">
+        <h1 style="color: var(--accent); font-size: 48px; margin-bottom: 10px;">Game Over</h1>
+        <div id="end-results"></div>
+        <button onclick="showMenu()" class="btn-primary" style="font-size: 20px; padding: 10px 30px;">Return to Menu</button>
+    </div>
+
+    <script src="engine.js"></script>
+    <script src="ai.js"></script>
+    <script src="ui.js"></script>
+</body>
+</html>

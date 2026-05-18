@@ -1,0 +1,49 @@
+{
+  "guid": "hand-display-prefab-001",
+  "name": "HandDisplay",
+  "type": "Prefab",
+  "components": [
+    {
+      "name": "RectTransform",
+      "properties": {
+        "width": 600,
+        "height": 150,
+        "anchorMin": { "x": 0, "y": 0 },
+        "anchorMax": { "x": 1, "y": 0.2 }
+      }
+    },
+    {
+      "name": "GridLayoutGroup",
+      "properties": {
+        "cellSize": { "x": 60, "y": 90 },
+        "spacing": { "x": -15, "y": -15 },
+        "childForceExpandWidth": false,
+        "childForceExpandHeight": false
+      }
+    },
+    {
+      "name": "HandDisplay",
+      "properties": {
+        "playerId": 0
+      },
+      "children": [
+        {
+          "name": "HiddenHandContainer",
+          "type": "RectTransform",
+          "properties": {
+            "width": 200,
+            "height": 140
+          }
+        },
+        {
+          "name": "ShownHandContainer",
+          "type": "RectTransform",
+          "properties": {
+            "width": 400,
+            "height": 140
+          }
+        }
+      ]
+    }
+  ]
+}
