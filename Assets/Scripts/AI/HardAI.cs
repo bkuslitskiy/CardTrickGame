@@ -29,22 +29,25 @@ public class HardAI : RuleBasedAI
             var sorted = validCards.OrderByDescending(c => c.GetFaceValue()).ToList();
             return sorted.Count > 1 ? sorted[1] : sorted[0];
         }
-        else 
+        else
         {
-            // Determine current winning Value (dynamic power) in the play zone
+            // Determine current winning play-score in the zone.
             int maxValueInPlay = playZone.Max(c => GameRules.ScoreCard(c, gameState.GetCardSectionInPlayZone(c) ?? HandSection.Hidden));
-            
-            // Find cards in hand that can beat the current winning Value
+
+            // Find cards in hand that can beat the current winning play-score.
             var winningCards = validCards.Where(c => GameRules.ScoreCard(c, me.Hand.GetCardSection(c) ?? HandSection.Hidden) > maxValueInPlay).ToList();
-            
+
             if (winningCards.Count > 0)
             {
-                // Efficient play: Play the card with the lowest face value (Score) that still wins the trick.
-                // This preserves high-Score cards for when we are likely to lose or need a better prize.
-                return winningCards.OrderBy(c => c.GetFaceValue()).First();
+                // Efficient play: use the lowest *play-score* card that still wins.
+                // Sorting by play-score (not face value) is correct because a Shown King
+                // has play-score 5 but face-value 13 — we'd rather spend it to win cheaply
+                // than waste a hidden high card, and we'd never want to accidentally classify
+                // it as an "expensive" win based on its prize value.
+                return winningCards.OrderBy(c => GameRules.ScoreCard(c, me.Hand.GetCardSection(c) ?? HandSection.Hidden)).First();
             }
-            
-            // Can't win: discard the lowest face value (Score) card to minimize loss.
+
+            // Can't win: throw the lowest *face-value* card to preserve prize potential.
             return validCards.OrderBy(c => c.GetFaceValue()).First();
         }
     }

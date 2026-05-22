@@ -48,30 +48,23 @@ test.describe('Reveal phase', () => {
   });
 
   test('AI starter auto-targets within ~1s (no human prompt shown)', async ({ page }) => {
-    // Force AI starter for round 1 and skip the human turn.
-    await rigState(page, { starterId: 1 });
-    // The previous beforeEach already started the game with the human as
-    // starter, but the reveal phase hasn't completed yet. Force the loop
-    // forward by replaying the phase: trigger a state observer.
-    await page.evaluate(() => {
-      // Restart cleanly with AI in position 0 so the new game's starter is AI.
-      window.gameState.isRunning = false;
-    });
-    // Reload with the human swapped out for an AI.
+    // Override the beforeEach: load fresh, then start an all-AI game so
+    // the Reveal phase runs autonomously with no human-click block.
     await page.goto('/index.html');
-    await page.evaluate(() => {
-      localStorage.clear();
-      window.startGame();
-      // After startGame, the human is at id 0. Swap them to all-AI.
-      window.gameState.players[0].isHuman = false;
-      window.gameState.players[0].difficulty = 'Easy';
-    });
+    await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
+    await page.waitForFunction(() => typeof window.startGame === 'function');
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
 
-    // After at most a few seconds, one opponent's Shown should grow by 1.
+    // One Shown hand should grow within a few seconds (~600ms of AI delay
+    // before the card is revealed).
     await page.waitForFunction(() => {
       const total = window.gameState.players.reduce((s, p) => s + p.shownHand.length, 0);
       return total >= 1;
     }, null, { timeout: 5_000 });
+
+    // The human-input prompt should NOT have been shown.
+    const prompt = await page.locator('#prompt-overlay').innerText().catch(() => '');
+    expect(prompt).not.toMatch(/Choose an opponent/i);
   });
 });
 
@@ -162,58 +155,212 @@ test.describe('Play phase — drag and drop', () => {
 test.describe('Determine phase', () => {
   test('after all 4 cards are played, a winner (or tie) is announced', async ({ page }) => {
     await loadApp(page);
-    // All-AI game: rewire startGame to skip the human prompt.
-    await page.evaluate(() => {
-      window.startGame();
-      window.gameState.players[0].isHuman = false;
-      window.gameState.players[0].difficulty = 'Easy';
-    });
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
 
-    // Wait for the prompt overlay to show a trick result.
+    // Wait for the prompt overlay to show a trick result. The new Determine
+    // sequence runs ~2s of animations, so allow a generous timeout.
     await expect(page.locator('#prompt-overlay')).toContainText(
-      /(wins the trick|Tie!)/i, { timeout: 15_000 });
+      /(wins the trick|Tie!|trick is void|no prize)/i, { timeout: 30_000 });
   });
 
   test('winner receives the prize card into their scoring zone', async ({ page }) => {
     await loadApp(page);
     await page.evaluate(() => {
-      window.startGame();
-      window.gameState.players[0].isHuman = false;
-      window.gameState.players[0].difficulty = 'Easy';
+      void window.startGame({ humanId: -1 });
+      // The new Determine sequence blocks on a click before pushing the prize.
+      // Auto-dismiss whenever a click-wait is pending.
+      window.__auto = setInterval(() => {
+        const r = window.gameState?.resolveInput;
+        if (typeof r === 'function') {
+          window.gameState.resolveInput = null;
+          try { r(); } catch (_) {}
+        }
+      }, 50);
     });
 
-    // Wait until at least one trick has resolved.
+    // Wait until at least one trick has resolved into a scoringZone, OR
+    // the prompt indicates a tied/void trick.
     await page.waitForFunction(() =>
       window.gameState.players.some(p => p.scoringZone.length > 0) ||
-      /tie/i.test(document.getElementById('prompt-overlay')?.innerText ?? ''),
-      null, { timeout: 15_000 });
+      /(tie|void)/i.test(document.getElementById('prompt-overlay')?.innerText ?? ''),
+      null, { timeout: 30_000 });
 
-    // If someone won, totals should be consistent: scoringZone count ≤ rounds completed.
     const ok = await page.evaluate(() => {
-      const rounds = window.gameState.round; // 1-indexed; increments after Score
+      clearInterval(window.__auto);
+      const rounds = window.gameState.round;
       const totalScored = window.gameState.players
         .reduce((s, p) => s + p.scoringZone.length, 0);
-      return totalScored <= rounds; // ≤ because some rounds may tie out with no prize
+      return totalScored <= rounds;
     });
     expect(ok).toBe(true);
   });
 });
 
-test.describe('Edge case: no hidden cards left', () => {
-  test('reveal phase skips cleanly when every player has empty Hidden', async ({ page }) => {
+test.describe('Determine-phase decorations', () => {
+  // Tests for the visual sequence: cut on tied cards → crown on winner →
+  // cut on prize-tied → coins on prize. We exercise decorateCard directly
+  // (it's the contract createCardElement and the orchestration both rely
+  // on) and then run an integration test that drives the full sequence.
+
+  test.beforeEach(async ({ page }) => {
     await loadApp(page);
     await startGame(page);
-    await rigState(page, {
-      // Move all hidden cards into shown for every player. The next reveal
-      // phase should detect zero valid targets and proceed straight to Play.
+  });
+
+  test('decorateCard("crown") adds CROWN_SVG inside the card element', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const card = new window.Card('♣', 14);
+      window.gameState.playZone = [{
+        card, player: window.gameState.players[0], section: 'Hidden',
+      }];
+      window.renderPlayZone();
+      window.decorateCard(card, 'crown');
+      return {
+        flagSet: card.hasCrown === true,
+        crownCount: document.querySelectorAll('#play-slot-0 .card-crown').length,
+      };
     });
+    expect(result.flagSet).toBe(true);
+    expect(result.crownCount).toBe(1);
+  });
+
+  test('decorateCard("coins") adds COINS_SVG inside the card element', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const card = new window.Card('♦', 13);
+      window.gameState.playZone = [{
+        card, player: window.gameState.players[0], section: 'Hidden',
+      }];
+      window.renderPlayZone();
+      window.decorateCard(card, 'coins');
+      return {
+        flagSet: card.hasCoins === true,
+        coinsCount: document.querySelectorAll('#play-slot-0 .card-coins').length,
+      };
+    });
+    expect(result.flagSet).toBe(true);
+    expect(result.coinsCount).toBe(1);
+  });
+
+  test('decorateCard("cut") applies .cut class to the card element', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const card = new window.Card('♥', 7);
+      window.gameState.playZone = [{
+        card, player: window.gameState.players[0], section: 'Hidden',
+      }];
+      window.renderPlayZone();
+      window.decorateCard(card, 'cut');
+      return {
+        flagSet: card.isCut === true,
+        hasCutClass: document.querySelector('#play-slot-0 .card')?.classList.contains('cut'),
+      };
+    });
+    expect(result.flagSet).toBe(true);
+    expect(result.hasCutClass).toBe(true);
+  });
+
+  test('decoration flags survive a re-render of the play zone', async ({ page }) => {
+    // The flags live on the Card object so re-renders re-emit the SVGs and
+    // re-apply the .cut class. This guards against a refactor that switches
+    // to one-shot DOM-only decoration.
+    const result = await page.evaluate(() => {
+      const card = new window.Card('♣', 14);
+      card.hasCrown = true;
+      card.hasCoins = true;
+      card.isCut    = true;
+      window.gameState.playZone = [{
+        card, player: window.gameState.players[0], section: 'Hidden',
+      }];
+      window.renderPlayZone();    // first render
+      window.renderPlayZone();    // second render — flags must still produce output
+      const cardEl = document.querySelector('#play-slot-0 .card');
+      return {
+        hasCutClass: cardEl?.classList.contains('cut'),
+        crownCount:  document.querySelectorAll('#play-slot-0 .card-crown').length,
+        coinsCount:  document.querySelectorAll('#play-slot-0 .card-coins').length,
+      };
+    });
+    expect(result.hasCutClass).toBe(true);
+    expect(result.crownCount).toBe(1);
+    expect(result.coinsCount).toBe(1);
+  });
+
+  test('integration: cut → crown → coins fires across the Determine sequence', async ({ page }) => {
+    // Rig a play zone with a 2-card value tie (two 10s discarded), an Ace
+    // winner, and a K as prize. Trigger executeDeterminePhase and watch
+    // the DOM at each animation beat.
     await page.evaluate(() => {
-      for (const p of window.gameState.players) {
-        p.shownHand.push(...p.hiddenHand.splice(0));
-      }
+      window.gameState.isRunning = false;     // stop the running gameLoop
+      window.gameState.phase = 'Determine';
+      const C = (s, r) => new window.Card(s, r);
+      const ps = window.gameState.players;
+      window.gameState.playZone = [
+        { card: C('♣', 10), player: ps[0], section: 'Hidden' },  // tied
+        { card: C('♦', 14), player: ps[1], section: 'Hidden' },  // WINNER
+        { card: C('♥', 10), player: ps[2], section: 'Hidden' },  // tied
+        { card: C('♠', 13), player: ps[3], section: 'Hidden' },  // PRIZE
+      ];
+      window.gameState.isRunning = true;
+      window.renderPlayZone();
+      void window.executeDeterminePhase();
     });
 
-    // Phase will transition to Play without throwing or hanging.
+    // Step 1: tied 10s should pick up .cut.
+    await expect.poll(
+      () => page.locator('.card.cut').count(),
+      { timeout: 4_000 }
+    ).toBeGreaterThanOrEqual(2);
+
+    // Step 2: crown should appear on the winner's card.
+    await expect.poll(
+      () => page.locator('#play-slot-1 .card-crown').count(),
+      { timeout: 4_000 }
+    ).toBe(1);
+
+    // Step 3: coin pile should appear on the prize card.
+    await expect.poll(
+      () => page.locator('#play-slot-3 .card-coins').count(),
+      { timeout: 4_000 }
+    ).toBe(1);
+  });
+});
+
+test.describe('Edge case: no hidden cards left', () => {
+  test('reveal phase skips cleanly when every player has empty Hidden', async ({ page }) => {
+    // Build a gameState directly with all 52 cards in shown hands (zero in
+    // hidden) and drive gameLoop. We deliberately bypass startGame because
+    // startGame's synchronous chain enters executeRevealPhase before the
+    // test can mutate hands — by the time the mutation lands, validTargets
+    // has already been computed against the full deal and the reveal logic
+    // tries to splice a card from a now-empty array.
+    await loadApp(page);
+    await page.evaluate(() => {
+      document.getElementById('menu-screen').style.display = 'none';
+      document.getElementById('game-board').style.display = 'block';
+
+      const players = [
+        new window.Player(0, 'South', false, 'Easy'),
+        new window.Player(1, 'West',  false, 'Easy'),
+        new window.Player(2, 'North', false, 'Easy'),
+        new window.Player(3, 'East',  false, 'Easy'),
+      ];
+      const deck = new window.Deck();
+      // Deal every card into shown so hidden is empty for all four seats.
+      players.forEach(p => { p.shownHand = deck.deal(13); });
+
+      window.gameState = {
+        players,
+        activePlayerId: null,
+        round: 1, phase: 'Reveal', starterId: 0,
+        playZone: [], discards: [],
+        isRunning: true, resolveInput: null,
+      };
+      window.renderAll();
+      void window.gameLoop();
+    });
+
+    // executeRevealPhase should detect zero valid targets, skip the block,
+    // and advance phase to 'Play'. The status text updates as the next
+    // gameLoop iteration enters executePlayPhase.
     await expect(page.locator('#status-text')).toContainText(/Play/i, { timeout: 8_000 });
   });
 });

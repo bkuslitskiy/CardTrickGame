@@ -41,22 +41,27 @@ test.describe('Initial menu state', () => {
 });
 
 test.describe('Rules modal', () => {
+  // Exact-name role queries — `button:has-text("Rules")` also matches the
+  // "Close Rules" button as a substring, tripping Playwright's strict mode.
+  const rulesBtn = (page) => page.getByRole('button', { name: 'Rules',       exact: true });
+  const closeBtn = (page) => page.getByRole('button', { name: 'Close Rules', exact: true });
+
   test('opens and closes via its own buttons', async ({ page }) => {
     await loadApp(page);
 
     // Closed by default (inline style="display: none;" on #rules-screen).
     expect(await page.locator('#rules-screen').evaluate(el => el.style.display)).toBe('none');
 
-    await page.locator('button:has-text("Rules")').click();
+    await rulesBtn(page).click();
     expect(await page.locator('#rules-screen').evaluate(el => el.style.display)).not.toBe('none');
 
-    await page.locator('button:has-text("Close Rules")').click();
+    await closeBtn(page).click();
     expect(await page.locator('#rules-screen').evaluate(el => el.style.display)).toBe('none');
   });
 
   test('rules text mentions the Hidden/Shown value tables', async ({ page }) => {
     await loadApp(page);
-    await page.locator('button:has-text("Rules")').click();
+    await rulesBtn(page).click();
     const body = await page.locator('#rules-screen').innerText();
     expect(body).toMatch(/Hidden/);
     expect(body).toMatch(/Shown/);
@@ -106,6 +111,67 @@ test.describe('Start New Game', () => {
     });
     expect(summary.total).toBe(52);
     expect(summary.unique).toBe(52);
+  });
+});
+
+test.describe('startGame options', () => {
+  test('{ humanId: -1 } produces an all-AI game', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const flags = await page.evaluate(() =>
+      window.gameState.players.map(p => p.isHuman));
+    expect(flags).toEqual([false, false, false, false]);
+  });
+
+  test('{ humanId: 2 } puts the human at the North seat', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: 2 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const summary = await page.evaluate(() =>
+      window.gameState.players.map(p => ({
+        id: p.id, name: p.name, isHuman: p.isHuman,
+      })));
+    expect(summary).toEqual([
+      { id: 0, name: 'South', isHuman: false },
+      { id: 1, name: 'West',  isHuman: false },
+      { id: 2, name: 'North', isHuman: true  },
+      { id: 3, name: 'East',  isHuman: false },
+    ]);
+  });
+
+  test('default startGame() (no opts) puts the human at seat 0', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame(); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const flags = await page.evaluate(() =>
+      window.gameState.players.map(p => p.isHuman));
+    expect(flags).toEqual([true, false, false, false]);
+  });
+});
+
+test.describe('Responsive layout', () => {
+  test('E/W player areas use column layout at ≤900px width', async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 800 });
+    await loadApp(page);
+    await startGame(page);
+
+    const dir = await page.locator('.player-area.west').evaluate(el =>
+      window.getComputedStyle(el).flexDirection);
+    expect(dir).toBe('column');
+  });
+
+  test('E/W player areas use row layout at >900px width', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadApp(page);
+    await startGame(page);
+
+    const dir = await page.locator('.player-area.west').evaluate(el =>
+      window.getComputedStyle(el).flexDirection);
+    expect(dir).toBe('row');
   });
 });
 

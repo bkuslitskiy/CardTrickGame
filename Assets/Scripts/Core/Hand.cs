@@ -151,10 +151,23 @@ public class Hand
 
     /// <summary>
     /// Get all cards in hand (Hidden + Shown).
+    /// Allocates a new list — fine for UI/display calls.
+    /// For tight AI/simulation loops use <see cref="ForEachCard"/> instead.
     /// </summary>
     public List<Card> GetAllCards()
     {
-        return new List<Card>(_hidden.Concat(_shown).ToList());
+        return new List<Card>(_hidden.Concat(_shown));
+    }
+
+    /// <summary>
+    /// Non-allocating enumeration of all cards (Hidden then Shown).
+    /// Preferred for AI decision-making and RL simulation paths where
+    /// GC pressure matters.
+    /// </summary>
+    public void ForEachCard(System.Action<Card, HandSection> action)
+    {
+        foreach (Card c in _hidden) action(c, HandSection.Hidden);
+        foreach (Card c in _shown)  action(c, HandSection.Shown);
     }
 
     /// <summary>

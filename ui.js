@@ -68,13 +68,47 @@ function showMenu() {
 function showRules() { document.getElementById('rules-screen').style.display = 'flex'; }
 function hideRules() { document.getElementById('rules-screen').style.display = 'none'; }
 
-async function startGame() {
+/**
+ * Start a new game.
+ *
+ * @param {Object}   [opts]
+ * @param {number}   [opts.humanId=0]   Which seat (0–3) the human plays. Set
+ *                                      to -1 (or any out-of-range value) for
+ *                                      a fully autonomous AI-vs-AI demo run.
+ *                                      Tests use humanId: -1 to avoid the
+ *                                      Reveal-phase prompt blocking on a click.
+ * @param {string[]} [opts.diffs]       Override AI difficulties [p0,p1,p2,p3].
+ *                                      When omitted, picks up the dropdown
+ *                                      values for AI seats and 'Easy' for the
+ *                                      human seat (if it's been demoted to AI).
+ */
+async function startGame(opts = {}) {
     clearSavedGame();
-    document.getElementById('menu-screen').style.display = 'none'; document.getElementById('end-screen').style.display = 'none'; document.getElementById('game-board').style.display = 'block';
-    let diffs = [ 'Human', document.getElementById('diff-1').value, document.getElementById('diff-2').value, document.getElementById('diff-3').value ];
+    document.getElementById('menu-screen').style.display = 'none';
+    document.getElementById('end-screen').style.display = 'none';
+    document.getElementById('game-board').style.display = 'block';
+
+    const humanId = (opts.humanId === undefined) ? 0 : opts.humanId;
+    const dropdownDiffs = [
+        'Easy',                                       // p0 — no dropdown for the human seat
+        document.getElementById('diff-1').value,
+        document.getElementById('diff-2').value,
+        document.getElementById('diff-3').value,
+    ];
+    const diffs = opts.diffs || dropdownDiffs;
+
+    const seatName = ['South', 'West', 'North', 'East'];
     gameState = {
-        players: [ new Player(0, 'South', true), new Player(1, 'West', false, diffs[1]), new Player(2, 'North', false, diffs[2]), new Player(3, 'East', false, diffs[3]) ], activePlayerId: null,
-        round: 1, phase: 'Reveal', starterId: 0, playZone: [], discards: [], isRunning: true, resolveInput: null
+        players: seatName.map((name, i) => new Player(
+            i,
+            name,
+            i === humanId,
+            i === humanId ? 'Human' : (diffs[i] || 'Easy')
+        )),
+        activePlayerId: null,
+        round: 1, phase: 'Reveal', starterId: 0,
+        playZone: [], discards: [],
+        isRunning: true, resolveInput: null,
     };
     let deck = new Deck();
     gameState.players.forEach(p => p.hiddenHand = deck.deal(13));
@@ -135,6 +169,66 @@ function renderAll() {
     renderPlayZone();
 }
 
+// Inline SVGs used by decorateCard(). Both fit fully INSIDE the 64x90 card
+// face — the card has overflow:hidden, so anything positioned outside the
+// frame gets clipped (which is exactly what caused the crown's top half to
+// disappear in earlier revisions).
+const CROWN_SVG = `
+<svg class="card-crown" viewBox="0 0 24 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M 2 15 L 4 6 L 8 11 L 12 3 L 16 11 L 20 6 L 22 15 Z"
+        fill="#f4c542" stroke="#8b6914" stroke-width="0.8" stroke-linejoin="round"/>
+  <rect x="1.5" y="14" width="21" height="2.6" fill="#e5b32a" stroke="#8b6914" stroke-width="0.7"/>
+  <circle cx="4"  cy="5"   r="1.0" fill="#c0392b"/>
+  <circle cx="12" cy="2.6" r="1.3" fill="#c0392b"/>
+  <circle cx="20" cy="5"   r="1.0" fill="#c0392b"/>
+</svg>`.trim();
+
+const COINS_SVG = `
+<svg class="card-coins" viewBox="0 0 28 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <ellipse cx="14" cy="24"  rx="13" ry="1.6" fill="#2c1f06" opacity="0.55"/>
+  <ellipse cx="14" cy="22"  rx="12" ry="2.6" fill="#b8830f" stroke="#5a4310" stroke-width="0.7"/>
+  <ellipse cx="11" cy="18"  rx="11" ry="2.6" fill="#f4c542" stroke="#8b6914" stroke-width="0.7"/>
+  <ellipse cx="16" cy="14"  rx="11" ry="2.6" fill="#f4c542" stroke="#8b6914" stroke-width="0.7"/>
+  <ellipse cx="12" cy="10"  rx="10" ry="2.4" fill="#f4c542" stroke="#8b6914" stroke-width="0.7"/>
+  <ellipse cx="15" cy="6"   rx="9"  ry="2.2" fill="#f4c542" stroke="#8b6914" stroke-width="0.7"/>
+  <ellipse cx="13" cy="2.5" rx="8"  ry="2.0" fill="#f4c542" stroke="#8b6914" stroke-width="0.7"/>
+  <text x="13" y="3.6" text-anchor="middle" font-size="2.9" fill="#5a4310"
+        font-family="Georgia, serif" font-weight="bold">$</text>
+  <ellipse cx="3"  cy="23"  rx="2.8" ry="1.2" fill="#f4c542" stroke="#8b6914" stroke-width="0.5"/>
+  <ellipse cx="25" cy="23"  rx="2.4" ry="1.1" fill="#f4c542" stroke="#8b6914" stroke-width="0.5"/>
+</svg>`.trim();
+
+/**
+ * Apply a Determine-phase decoration to a card. Sets a flag on the Card
+ * object (so subsequent re-renders preserve it) and patches the existing
+ * DOM element in place (so the CSS transition / @keyframes animation plays
+ * smoothly without rebuilding the slot).
+ *
+ *   type 'cut'   — value/score-tie elimination: dim + diagonal slash
+ *   type 'crown' — winner indicator (gold crown above the card)
+ *   type 'coins' — prize indicator (coin stack on the card)
+ */
+function decorateCard(card, type) {
+    if (!card) return;
+    if (type === 'cut')   card.isCut    = true;
+    if (type === 'crown') card.hasCrown = true;
+    if (type === 'coins') card.hasCoins = true;
+
+    const entry = gameState.playZone.find(p => p.card === card);
+    if (!entry) return;
+    const slot = document.getElementById(`play-slot-${entry.player.id}`);
+    const el   = slot?.querySelector('.card');
+    if (!el) return;
+
+    if (type === 'cut') {
+        el.classList.add('cut');
+    } else if (type === 'crown' && !el.querySelector('.card-crown')) {
+        el.insertAdjacentHTML('beforeend', CROWN_SVG);
+    } else if (type === 'coins' && !el.querySelector('.card-coins')) {
+        el.insertAdjacentHTML('beforeend', COINS_SVG);
+    }
+}
+
 function createCardElement(c, isInteractive, clickCallback, isHidden, section) {
     let el = document.createElement('div');
     if (isHidden) { el.className = 'card back'; return el; }
@@ -142,14 +236,17 @@ function createCardElement(c, isInteractive, clickCallback, isHidden, section) {
     let isRevealing = c.isRevealing ? 'revealing' : '';
     let isShownClass = section === 'Shown' ? 'shown' : '';
     let interactiveClass = isInteractive ? 'clickable' : '';
-    el.className = `card ${c.colorClass} ${isShownClass} ${interactiveClass} ${isRevealing}`;
-    
+    let cutClass = c.isCut ? 'cut' : '';
+    el.className = `card ${c.colorClass} ${isShownClass} ${interactiveClass} ${isRevealing} ${cutClass}`.trim();
+
     let contentHTML = `
         <div class="card-top">${Ranks[c.rank]}<br>${c.suit}</div>
         <div class="card-center">${c.suit}</div>
         ${section === 'Shown' ? '<div class="card-modifier">SHOWN</div>' : ''}
+        ${c.hasCrown ? CROWN_SVG : ''}
+        ${c.hasCoins ? COINS_SVG : ''}
     `;
-    
+
     if (isRevealing) { setTimeout(() => { el.innerHTML = contentHTML; }, 300); } else { el.innerHTML = contentHTML; }
 
     if (isInteractive) {

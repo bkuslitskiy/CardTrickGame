@@ -277,3 +277,99 @@ test.describe('Round starter rotation', () => {
     ]);
   });
 });
+
+test.describe('determineTrick — visual-effect return fields', () => {
+  // determineTrick was extended to surface the cards eliminated by value
+  // ties and by prize score ties, so the UI can "cut" them visually. Tests
+  // below pin that contract.
+  test.beforeEach(async ({ page }) => { await loadApp(page); });
+
+  test('2-card value tie: valueTiedCards has the two tied cards', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 10), player: { id: 0 }, section: 'Hidden' },
+        { card: C('♦', 10), player: { id: 1 }, section: 'Hidden' },
+        { card: C('♥',  7), player: { id: 2 }, section: 'Hidden' },
+        { card: C('♠',  3), player: { id: 3 }, section: 'Hidden' },
+      ];
+      const r = window.determineTrick(playZone);
+      return {
+        winnerId: r.winnerId,
+        valueTiedRanks: r.valueTiedCards.map(c => c.rank).sort(),
+        scoreTiedCount: r.scoreTiedCards.length,
+      };
+    });
+    expect(result.winnerId).toBe(2);                  // the 7 wins after the 10s are removed
+    expect(result.valueTiedRanks).toEqual([10, 10]);
+    expect(result.scoreTiedCount).toBe(0);
+  });
+
+  test('3-card void tie: ALL four cards land in valueTiedCards', async ({ page }) => {
+    // Per Basic rules: "If three cards tie, all cards are discarded and
+    // nobody wins." The UI cuts every card in the play zone.
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 10), player: { id: 0 }, section: 'Hidden' },
+        { card: C('♦', 10), player: { id: 1 }, section: 'Hidden' },
+        { card: C('♥', 10), player: { id: 2 }, section: 'Hidden' },
+        { card: C('♠',  4), player: { id: 3 }, section: 'Hidden' },
+      ];
+      return window.determineTrick(playZone);
+    });
+    expect(result.winnerId).toBeNull();
+    expect(result.prizeCard).toBeNull();
+    expect(result.valueTiedCards).toHaveLength(4);
+    expect(result.scoreTiedCards).toHaveLength(0);
+  });
+
+  test('prize score tie: scoreTiedCards has the tied prize candidates', async ({ page }) => {
+    // K from Hidden (value 13) and K from Shown (value 5) survive value tie
+    // step, then collide on score (13 each) in the prize pool. The Ace
+    // wins on Value; both Ks should appear in scoreTiedCards.
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 14), player: { id: 0 }, section: 'Hidden' },
+        { card: C('♦', 13), player: { id: 1 }, section: 'Hidden' },
+        { card: C('♥', 13), player: { id: 2 }, section: 'Shown'  },
+        { card: C('♠',  4), player: { id: 3 }, section: 'Hidden' },
+      ];
+      return window.determineTrick(playZone);
+    });
+    expect(result.winnerId).toBe(0);
+    expect(result.prizeCard?.rank).toBe(4);
+    expect(result.scoreTiedCards).toHaveLength(2);
+    expect(result.scoreTiedCards.map(c => c.rank).sort()).toEqual([13, 13]);
+  });
+
+  test('clean trick (no ties): both tied arrays are empty', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 14), player: { id: 0 }, section: 'Hidden' },
+        { card: C('♦',  7), player: { id: 1 }, section: 'Hidden' },
+        { card: C('♥',  5), player: { id: 2 }, section: 'Hidden' },
+        { card: C('♠',  3), player: { id: 3 }, section: 'Hidden' },
+      ];
+      return window.determineTrick(playZone);
+    });
+    expect(result.valueTiedCards).toHaveLength(0);
+    expect(result.scoreTiedCards).toHaveLength(0);
+  });
+});
+
+test.describe('window globals', () => {
+  test.beforeEach(async ({ page }) => { await loadApp(page); });
+
+  test('window.gameLoop is exposed for tests to drive directly', async ({ page }) => {
+    const ok = await page.evaluate(() => typeof window.gameLoop === 'function');
+    expect(ok).toBe(true);
+  });
+
+  test('window.decorateCard is exposed', async ({ page }) => {
+    const ok = await page.evaluate(() => typeof window.decorateCard === 'function');
+    expect(ok).toBe(true);
+  });
+});

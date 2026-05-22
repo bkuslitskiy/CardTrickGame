@@ -13,6 +13,11 @@ public class MenuUI : MonoBehaviour
     [SerializeField] private Button mixedButton;
     [SerializeField] private Button quitButton;
     [SerializeField] private Text titleText;
+    /// <summary>
+    /// Optional Tips button. Assign in the scene Inspector (alongside the
+    /// other difficulty buttons). Calls TipsWindowUI.Show() when clicked.
+    /// </summary>
+    [SerializeField] private Button tipsButton;
     
     private bool initialized = false;
     
@@ -34,7 +39,16 @@ public class MenuUI : MonoBehaviour
         
         if (quitButton != null)
             quitButton.onClick.AddListener(() => Application.Quit());
-        
+
+        if (tipsButton != null)
+        {
+            tipsButton.onClick.AddListener(() =>
+            {
+                Canvas canvas = GetComponentInParent<Canvas>() ?? FindAnyObjectByType<Canvas>();
+                if (canvas != null) TipsWindowUI.Show(canvas.transform);
+            });
+        }
+
         initialized = true;
     }
     private void StartGameWithDifficulty(Difficulty[] difficulties)
@@ -51,11 +65,11 @@ public class MenuUI : MonoBehaviour
         gm.InitializeGame(difficulties);
         gm.StartGame();
 
-        // Start the game loop
+        // Start the game loop with adaptive timing (no fixed override).
         var loop = GameLoopManager.Instance;
         if (loop != null)
         {
-            loop.SetPhaseDuration(2f);
+            loop.SetPhaseDuration(-1f); // revert to adaptive phase-aware timing
             loop.StartGameLoop();
         }
 

@@ -279,7 +279,7 @@ public class GameManager
 
         OnTrickWon?.Invoke(winner, prizeCard);
 
-        bool hasHuman = _gameState.GetAllPlayers().Any(p => p.AIImplementation != null && p.AIImplementation.GetType().Name == "HumanPlayer");
+        bool hasHuman = _gameState.GetAllPlayers().Any(p => p.AIImplementation is HumanPlayer);
         if (hasHuman)
         {
             pausedForHumanInput = true;

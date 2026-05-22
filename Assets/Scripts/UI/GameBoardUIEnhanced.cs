@@ -289,8 +289,8 @@ public class GameBoardUIEnhanced : MonoBehaviour
         var state = gameManagerController.GetGameState();
         if (state != null)
         {
-            foreach(var p in state.GetAllPlayers())
-                if (p.AIImplementation != null && p.AIImplementation.GetType().Name == "HumanPlayer") hasHuman = true;
+            foreach (var p in state.GetAllPlayers())
+                if (p.AIImplementation is HumanPlayer) hasHuman = true;
         }
 
         if (hasHuman)

@@ -11,6 +11,14 @@ public abstract class RuleBasedAI : IPlayer
 {
     protected int PlayerID { get; private set; }
     protected Difficulty DifficultyLevel { get; private set; }
+    /// <summary>
+    /// Per-game history of observations for future AI implementations (e.g. discard
+    /// tracking in Medium AI, pattern recognition in Hard AI).
+    /// Lifecycle: AIFactory creates a fresh AI instance each game, so GameHistory is
+    /// naturally cleared between games — no explicit reset needed.
+    /// Within a single game it grows with each ObserveGameState call; future subclasses
+    /// should trim or cap it if the dataset becomes large.
+    /// </summary>
     protected List<GameSnapshot> GameHistory { get; private set; }
 
     public RuleBasedAI(int playerId, Difficulty difficulty)

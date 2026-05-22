@@ -47,11 +47,14 @@
     --radius-panel:    10px;
     --radius-btn:      6px;
 
-    /* Sizing */
+    /* Sizing.
+       --card-stride / --card-stride-v = visible width (or height) of each
+       non-first card in a stacked hand. Larger = more of each card is shown
+       between siblings. */
     --card-w:          64px;
     --card-h:          90px;
-    --card-overlap:    34px;   /* horizontal overlap when cards stack */
-    --card-overlap-v:  26px;   /* vertical overlap for side hands */
+    --card-stride:     44px;
+    --card-stride-v:   30px;
     --header-h:        56px;
 }
 
@@ -87,6 +90,13 @@ select { font-family: inherit; }
 }
 
 header {
+    /* position: relative is required for z-index to apply (the default
+       'static' positioning ignores z-index). Header sits above every
+       overlay so the Rules / Abandon Game buttons remain clickable when
+       the menu is open. */
+    position: relative;
+    z-index: 200;
+
     flex: 0 0 var(--header-h);
     height: var(--header-h);
     display: flex;
@@ -96,7 +106,6 @@ header {
     background: linear-gradient(to bottom, #061d11 0%, #0a2718 100%);
     border-bottom: 1px solid var(--bg-panel-edge);
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    z-index: 50;
 }
 
 header .title {
@@ -163,6 +172,10 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     z-index: 100;
     padding: 24px;
 }
+
+/* Rules and End screens layer above the menu overlay (z-index 100) but
+   stay below the header (z-index 200) so header buttons remain clickable. */
+#rules-screen, #end-screen { z-index: 150; }
 
 .modal-box {
     background: linear-gradient(to bottom, #1a4434 0%, var(--bg-panel) 100%);
@@ -320,8 +333,9 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     min-width: var(--card-w);
 }
 
-/* Horizontal hands (north/south): cards overlap to the right */
-.hand-container .card { margin-left: calc(var(--card-overlap) - var(--card-w)); }
+/* Horizontal hands (north/south): cards overlap so each non-first card
+   shows --card-stride pixels of itself to the left of the next one. */
+.hand-container .card { margin-left: calc(var(--card-stride) - var(--card-w)); }
 .hand-container .card:first-child { margin-left: 0; }
 
 /* Vertical hands (east/west) — toggled by ui.js for players 1 and 3 */
@@ -331,7 +345,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
 }
 .hand-container.vertical-hand .card {
     margin-left: 0;
-    margin-top: calc(var(--card-overlap-v) - var(--card-h));
+    margin-top: calc(var(--card-stride-v) - var(--card-h));
 }
 .hand-container.vertical-hand .card:first-child { margin-top: 0; }
 
@@ -432,6 +446,79 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
 }
 
 /* -------------------------------------------------------------------------
+   Determine-phase decorations: cut / crown / coins.
+   ------------------------------------------------------------------------- */
+
+/* "Cut" — applied to cards eliminated by value tie or score tie.
+   Dims the card and draws a diagonal red slash that wipes across it. */
+.card.cut {
+    transition: opacity 350ms ease, filter 350ms ease;
+    opacity: 0.45;
+    filter: grayscale(0.6) brightness(0.85);
+}
+.card.cut::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    pointer-events: none;
+    z-index: 8;
+    background:
+        linear-gradient(135deg,
+            transparent 47%,
+            rgba(220, 50, 50, 0.85) 49%,
+            rgba(220, 50, 50, 0.85) 51%,
+            transparent 53%);
+    animation: cut-strike 380ms ease forwards;
+    transform-origin: top left;
+}
+@keyframes cut-strike {
+    0%   { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+    100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+/* Crown — fits in the top-right corner of the card. Stays inside the
+   card frame (overflow:hidden on .card would otherwise clip it). The
+   top-left has the rank/suit indicator (.card-top), so the right side
+   is the natural empty slot. */
+.card-crown {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 20px;
+    height: 15px;
+    pointer-events: none;
+    z-index: 10;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55));
+    animation: crown-appear 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center;
+}
+@keyframes crown-appear {
+    0%   { transform: scale(0.3)  translateY(-4px); opacity: 0; }
+    65%  { transform: scale(1.2)  translateY(0);    opacity: 1; }
+    100% { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+
+/* Coin pile — bottom-left of the card. Bottom-right is reserved for the
+   "SHOWN" badge on shown cards, so we use the opposite corner. */
+.card-coins {
+    position: absolute;
+    bottom: 3px;
+    left: 3px;
+    width: 26px;
+    height: 24px;
+    pointer-events: none;
+    z-index: 10;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55));
+    animation: coins-appear 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: bottom left;
+}
+@keyframes coins-appear {
+    0%   { transform: scale(0.3) rotate(-25deg); opacity: 0; }
+    65%  { transform: scale(1.18) rotate(5deg);  opacity: 1; }
+    100% { transform: scale(1)    rotate(0deg);  opacity: 1; }
+}
+
+/* -------------------------------------------------------------------------
    11. Play zone
    ------------------------------------------------------------------------- */
 .play-zone {
@@ -478,24 +565,31 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
 /* -------------------------------------------------------------------------
    12. Prompt overlay (in-board message bar)
    ------------------------------------------------------------------------- */
+/* Floats in the gap between the north hand and the play zone. The play
+   zone is 240px tall (top edge at 50% − 120px) and the cards inside
+   extend ~5px above the grid row, so we pull the prompt up another
+   ~50px to keep a comfortable gap above the topmost card. */
 #prompt-overlay {
     position: absolute;
-    top: 12px;
+    top: calc(50% - 175px);
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.82);
     color: var(--accent);
-    padding: 8px 18px;
-    border-radius: 20px;
-    font-size: 14px;
+    padding: 6px 16px;
+    border-radius: 18px;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.3px;
-    border: 1px solid rgba(230,196,106,0.4);
+    border: 1px solid rgba(230,196,106,0.45);
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     z-index: 40;
     display: none;    /* JS toggles to 'block' via setPrompt() */
-    max-width: 80%;
+    max-width: min(80%, 480px);
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* -------------------------------------------------------------------------
@@ -518,15 +612,43 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
 /* -------------------------------------------------------------------------
    14. Responsive squeeze
    ------------------------------------------------------------------------- */
+/* Tablet / narrow desktop */
 @media (max-width: 900px) {
     :root {
         --card-w: 54px;
         --card-h: 76px;
-        --card-overlap: 28px;
-        --card-overlap-v: 22px;
+        --card-stride: 36px;
+        --card-stride-v: 24px;
     }
     .play-zone { width: 270px; height: 200px; }
+    /* play-zone half-height is 100px, plus ~50px clearance for the card
+       overhang and gap to the prompt. */
+    #prompt-overlay { top: calc(50% - 150px); font-size: 12px; padding: 5px 14px; }
     header .title { font-size: 16px; }
+
+    /* E/W: stack info ABOVE the card column instead of beside it. This
+       frees ~60px of horizontal space on each side (info badge width)
+       so the play zone has more breathing room at this viewport.
+       NOTE: overflow:hidden is NOT applied to .player-area itself — that
+       would clip the badge text. It's scoped to the hand-container so
+       only the card column gets clipped. */
+    .player-area.west,
+    .player-area.east {
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        max-height: calc(100vh - 260px);
+    }
+    .player-area.west .hand-container.vertical-hand,
+    .player-area.east .hand-container.vertical-hand {
+        max-height: calc(100vh - 320px);
+        overflow: hidden;
+    }
+    .player-area.west .player-info,
+    .player-area.east .player-info {
+        max-width: 130px;     /* fits "West | Score: 100" at 13px font */
+        text-align: center;
+    }
 }
 
 @media (max-height: 700px) {
@@ -535,4 +657,82 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
         --card-h: 74px;
     }
     .play-zone { width: 250px; height: 180px; }
+    #prompt-overlay { top: calc(50% - 138px); }
+}
+
+/* -------------------------------------------------------------------------
+   Phone / very narrow viewport.
+   Strategy:
+   - Shrink everything (cards, header, badges, play zone, decorations).
+   - Cap horizontal hands at the viewport width so they don't overflow.
+   - Cap vertical (E/W) hands by height and hide the overflow — since AI
+     hands are just card-backs, clipping a few isn't lossy; the count is
+     still readable from the player info badge.
+   ------------------------------------------------------------------------- */
+@media (max-width: 600px) {
+    :root {
+        --card-w: 38px;
+        --card-h: 54px;
+        --card-stride: 20px;
+        --card-stride-v: 12px;
+        --header-h: 50px;
+    }
+
+    header { padding: 0 8px; gap: 6px; flex-wrap: wrap; }
+    header .title { font-size: 12px; line-height: 1.15; max-width: 90px; }
+    #status-text  { font-size: 10px; line-height: 1.15; text-align: center; }
+    header button { font-size: 11px; padding: 4px 8px; }
+
+    .play-zone {
+        width: 170px;
+        height: 150px;
+        border-width: 1.5px;
+    }
+
+    #prompt-overlay {
+        top: calc(50% - 120px);
+        font-size: 11px;
+        padding: 5px 12px;
+        max-width: calc(100vw - 16px);
+    }
+
+    .player-info {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        text-align: center;
+        /* Deliberately no max-width — let the badge size to its content
+           ("West | Score: 100" needs ~115px at this font, which fits in
+           any phone-portrait viewport). Capping it any tighter clips the
+           score number outside the visible pill. */
+    }
+
+    /* North/South: cap width so 13 cards never overflow horizontally. */
+    .player-area.north .hand-container,
+    .player-area.south .hand-container {
+        max-width: calc(100vw - 12px);
+    }
+
+    /* E/W player-info inherits the tablet rule (max-width: 130px). No
+       mobile override needed — 130px comfortably fits the badge text and
+       still leaves ~350px of central play-zone room on a 480px viewport. */
+
+    /* Card content scales with the smaller card body. */
+    .card .card-top    { font-size: 9px;  top: 3px; left: 4px; }
+    .card .card-center { font-size: 18px; }
+    .card .card-modifier {
+        font-size: 6px;
+        bottom: 2px; right: 2px;
+        padding: 1px 3px;
+    }
+
+    /* Decorations shrink so they don't dwarf a 38x54 card. */
+    .card-crown { width: 22px; height: 18px; top: -10px; }
+    .card-coins { width: 20px; height: 18px; bottom: -4px; right: -5px; }
+
+    /* Modal padding tightens so the rules text fits a small screen. */
+    .modal-box { padding: 18px 18px; }
+    .modal-box h2 { font-size: 18px; }
+    .modal-box p  { font-size: 12px; }
+    .difficulty-row { font-size: 12px; }
 }

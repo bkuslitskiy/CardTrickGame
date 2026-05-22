@@ -65,3 +65,7 @@ function resolvePrizeCard(remainingPlays) {
     }
     return null;
 }
+
+// Expose AI helpers so Playwright tests (ai.spec.js) can call them directly.
+window.selectAITarget     = selectAITarget;
+window.selectAICardToPlay = selectAICardToPlay;

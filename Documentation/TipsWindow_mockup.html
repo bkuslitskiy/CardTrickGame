@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tips Window — Mockup</title>
+<style>
+  :root {
+    --bg:         #1e3d2f;
+    --panel:      #1b3829;
+    --gold:       #ffd700;
+    --text:       #e8e8e8;
+    --muted:      #aaa;
+    --tier-bg:    rgba(255,255,255,0.04);
+    --beginner:   #5cb85c;
+    --inter:      #f0ad4e;
+    --advanced:   #d9534f;
+    --close-btn:  #c0392b;
+    --close-hover:#e74c3c;
+    --scroll-w:   8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text);
+  }
+
+  /* ── Backdrop overlay (simulates modal in-game) ── */
+  .backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.82);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10;
+  }
+
+  /* ── Modal panel ── */
+  .modal {
+    background: var(--panel);
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 10px;
+    width: min(860px, 92vw);
+    max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .modal-header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid rgba(255,215,0,0.2);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .modal-header h2 {
+    color: var(--gold);
+    font-size: 22px;
+    letter-spacing: 0.5px;
+  }
+  .modal-header .subtitle {
+    font-size: 12px; color: var(--muted); margin-top: 2px;
+  }
+  .close-btn {
+    background: var(--close-btn);
+    border: none; border-radius: 6px;
+    color: #fff; font-size: 14px; font-weight: bold;
+    padding: 6px 18px; cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .close-btn:hover { background: var(--close-hover); }
+
+  /* ── Scrollable body ── */
+  .modal-body {
+    overflow-y: auto;
+    padding: 20px 24px 24px;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,215,0,0.3) transparent;
+  }
+  .modal-body::-webkit-scrollbar { width: var(--scroll-w); }
+  .modal-body::-webkit-scrollbar-track { background: transparent; }
+  .modal-body::-webkit-scrollbar-thumb {
+    background: rgba(255,215,0,0.3);
+    border-radius: 4px;
+  }
+
+  /* ── Tier sections ── */
+  .tier {
+    background: var(--tier-bg);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .tier-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .tier-icon { font-size: 20px; }
+  .tier-title { font-size: 15px; font-weight: 700; }
+  .tier-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 12px; letter-spacing: 0.5px;
+    margin-left: auto;
+  }
+  .badge-beginner  { background: var(--beginner);  color: #fff; }
+  .badge-inter     { background: var(--inter);      color: #1a1a1a; }
+  .badge-advanced  { background: var(--advanced);   color: #fff; }
+
+  .tier-beginner  .tier-title { color: var(--beginner); }
+  .tier-inter     .tier-title { color: var(--inter); }
+  .tier-advanced  .tier-title { color: var(--advanced); }
+
+  /* ── Tips list ── */
+  .tips-list { list-style: none; }
+  .tips-list li {
+    display: flex; gap: 10px;
+    padding: 7px 0;
+    font-size: 13.5px; line-height: 1.6; color: var(--text);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .tips-list li:last-child { border-bottom: none; }
+  .bullet {
+    color: var(--gold); font-size: 18px; line-height: 1.4;
+    flex-shrink: 0; width: 14px;
+  }
+  strong { color: #fff; }
+
+  /* ── Divider between tiers ── */
+  .spacer { height: 4px; }
+</style>
+</head>
+<body>
+
+<div class="backdrop">
+  <div class="modal" role="dialog" aria-labelledby="tips-title">
+
+    <!-- Header -->
+    <div class="modal-header">
+      <div>
+        <h2 id="tips-title">Strategy Tips</h2>
+        <div class="subtitle">Tips are ordered from basic to advanced</div>
+      </div>
+      <button class="close-btn" onclick="this.closest('.backdrop').style.display='none'">Close ✕</button>
+    </div>
+
+    <!-- Scrollable content -->
+    <div class="modal-body">
+
+      <!-- ── Beginner ── -->
+      <div class="tier tier-beginner">
+        <div class="tier-header">
+          <span class="tier-icon">🃏</span>
+          <span class="tier-title">Beginner — Understanding the Basics</span>
+          <span class="tier-badge badge-beginner">Beginner</span>
+        </div>
+        <ul class="tips-list">
+          <li>
+            <span class="bullet">•</span>
+            <span>Your <strong>Hidden cards score face value</strong> when played. A King from the Hidden hand scores 13. Simple.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Shown cards follow different rules.</strong> A Shown King is only worth <strong>5</strong>. A Shown Ace is <strong>10</strong>. A Shown Queen is <strong>14</strong> — the highest score in the game. Learn these before planning your plays.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span>The <strong>final score uses face value only</strong>, regardless of which hand the card was played from. Win tricks to claim prizes; prizes are worth exactly what's printed on the card.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span>You don't choose <em>which</em> card gets revealed — that's random. But you do choose <strong>whose hand to target</strong>. That choice matters a great deal.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- ── Intermediate ── -->
+      <div class="tier tier-inter">
+        <div class="tier-header">
+          <span class="tier-icon">⚡</span>
+          <span class="tier-title">Intermediate — Playing with Intent</span>
+          <span class="tier-badge badge-inter">Intermediate</span>
+        </div>
+        <ul class="tips-list">
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Target reveals wisely.</strong> Moving a card from Hidden to Shown can dramatically change its play score. A hidden Ace (14) becomes a Shown Ace (10). A hidden Queen (12) becomes a Shown Queen (14) — potentially making an opponent's card more dangerous.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Disrupt the leader.</strong> Target reveals at whoever is currently ahead in points. Exposing one of their key cards limits how they can play it and may force bad decisions.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Expose players with few hidden cards.</strong> Once a player's entire hand is Shown, all their remaining cards are public knowledge and you can outmanoeuvre them with near-perfect information.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>When leading a trick, play a mid-value card.</strong> Leading your best card signals your strength and hands the trick to anyone with a slightly better card. A mid card baits opponents into committing without giving too much away.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Ties are a weapon.</strong> If you can't beat the current leader but can match their score, you deny them the trick entirely — both tied cards are discarded.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- ── Advanced ── -->
+      <div class="tier tier-advanced">
+        <div class="tier-header">
+          <span class="tier-icon">🧠</span>
+          <span class="tier-title">Advanced — Card Counting &amp; Precision</span>
+          <span class="tier-badge badge-advanced">Advanced</span>
+        </div>
+        <ul class="tips-list">
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Track what's been discarded.</strong> 52 cards, 4 of each rank. As the game progresses you can infer which high-value cards are still in play — and whose hands they're likely in.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>When following, spend the minimum that wins.</strong> If the current high card scores 11 and you hold cards scoring 12, 13, and 14 — play the 12. Save the stronger cards for tricks where the margin matters more.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Use the Shown King as a cheap winner.</strong> A King from the Shown hand only scores 5. Opponents may not bother burning a strong card to beat it. Spending it to win a modest trick is efficient — and it preserves your high face-value cards for prizes.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>When you can't win, protect your prize potential.</strong> Throw your <em>lowest face-value</em> card. Even losing, you minimise the prize you hand the winner — and keep your high cards for tricks you can win.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Read the prize pool before deciding.</strong> If the remaining cards in the play zone are low-value, intentionally losing isn't a tragedy. Don't burn an Ace to win a trick that only yields a 3♣.</span>
+          </li>
+          <li>
+            <span class="bullet">•</span>
+            <span><strong>Late-game reveals are more powerful.</strong> When players have fewer cards, a single reveal exposes a much larger fraction of someone's remaining hand — giving you near-perfect information for the final tricks.</span>
+          </li>
+        </ul>
+      </div>
+
+    </div><!-- end modal-body -->
+  </div><!-- end modal -->
+</div><!-- end backdrop -->
+
+</body>
+</html>

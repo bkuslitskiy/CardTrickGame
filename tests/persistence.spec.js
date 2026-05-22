@@ -24,9 +24,10 @@ test.describe('Mid-game save / resume', () => {
     await page.waitForTimeout(500);
     const snapshot = await readState(page);
 
-    // Abandon, then resume.
+    // Abandon, then resume. resumeGame is async (awaits gameLoop), so we
+    // void it to avoid hanging page.evaluate on the never-resolving promise.
     await page.evaluate(() => window.showMenu());
-    await page.evaluate(() => window.resumeGame());
+    await page.evaluate(() => { void window.resumeGame(); });
 
     await page.waitForFunction(() => window.gameState.isRunning === true);
     const restored = await readState(page);
@@ -46,15 +47,15 @@ test.describe('Mid-game save / resume', () => {
 
     expect(await page.evaluate(() => localStorage.getItem('cardGameState'))).toBeTruthy();
 
-    // Abandon, then start fresh.
+    // Abandon, then start fresh. void the async result so page.evaluate
+    // doesn't wait for the never-resolving gameLoop promise.
     await page.evaluate(() => window.showMenu());
-    // clearSavedGame is called inside startGame() in ui.js, so this should wipe it.
-    await page.evaluate(() => window.startGame());
+    await page.evaluate(() => { void window.startGame(); });
 
     // The freshly-started game writes its own save on the next loop tick, but
     // the test fires fast enough to catch the clear. Pull immediately.
     const immediately = await page.evaluate(() => {
-      window.startGame();
+      void window.startGame();
       return localStorage.getItem('cardGameState');
     });
     // After startGame() is invoked synchronously, the state is reset and the
@@ -140,27 +141,41 @@ test.describe('End screen', () => {
   });
 
   test('total face values across all players sum to a constant after a real game', async ({ page }) => {
-    // This is a sanity check that the trick resolver doesn't duplicate or
-    // destroy cards. Total faceValue across scoringZone + discards should
-    // equal the sum of face values of every card dealt (52 cards: 4 × (2+...+14) = 416).
-    // The test runs a complete AI-vs-AI game.
-    test.setTimeout(120_000);
+    // Sanity check that the trick resolver doesn't duplicate or destroy
+    // cards. Total faceValue across scoringZone + discards should equal the
+    // sum of face values of every card dealt (4 × (2+...+14) = 416).
+    // Runs a complete AI-vs-AI game.
+    test.setTimeout(240_000);
     await loadApp(page);
+
     await page.evaluate(() => {
-      window.startGame();
-      // Replace the human with an AI so the game plays automatically.
-      window.gameState.players[0].isHuman = false;
-      window.gameState.players[0].difficulty = 'Easy';
+      // Start an all-AI game so the Reveal phase doesn't block on a human
+      // click. The synchronous deal happens before the await, but the
+      // never-resolving gameLoop promise is voided so this callback returns.
+      void window.startGame({ humanId: -1 });
+
+      // executeDeterminePhase still blocks waiting for a click to dismiss
+      // each trick prompt. In headless mode no clicks happen, so install a
+      // poller that resolves the wait artificially.
+      window.__trickAutoAdvance = setInterval(() => {
+        if (window.gameState && typeof window.gameState.resolveInput === 'function') {
+          const r = window.gameState.resolveInput;
+          window.gameState.resolveInput = null;
+          try { r(); } catch (_) {}
+        }
+      }, 50);
     });
 
-    // Wait up to 90s for the end screen.
+    // Wait up to 210s for the end screen. A full game runs ~100s of timing
+    // delays (13 reveals + 52 plays + 13 determine sequences + animations).
     await page.waitForFunction(
       () => document.getElementById('end-screen')?.style.display !== 'none',
       null,
-      { timeout: 90_000 }
+      { timeout: 210_000 }
     );
 
     const totals = await page.evaluate(() => {
+      clearInterval(window.__trickAutoAdvance);
       const sum = (cards) => cards.reduce((s, c) => s + c.faceValue, 0);
       const scoring = window.gameState.players.reduce(
         (s, p) => s + sum(p.scoringZone), 0);

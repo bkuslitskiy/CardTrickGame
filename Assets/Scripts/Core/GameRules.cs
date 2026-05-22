@@ -24,10 +24,13 @@ public static class GameRules
     /// Determine winner of a trick given 4 played cards.
     /// Handles tie-breaking as per rules.
     /// Returns tuple of (winning player, prize card) or (null, null) if no winner.
+    ///
+    /// Perf note: scores are computed once and reused throughout — no second
+    /// scoring pass. Allocations are kept to a minimum for RL simulation paths.
     /// </summary>
     public static (Player winner, Card prizeCard) DetermineTrickWinner(
-        Card[] playedCards, 
-        Player[] playersInOrder, 
+        Card[] playedCards,
+        Player[] playersInOrder,
         GameState gameState)
     {
         if (playedCards == null || playedCards.Length != 4)
@@ -35,60 +38,71 @@ public static class GameRules
         if (playersInOrder == null || playersInOrder.Length != 4)
             throw new ArgumentException("Must have exactly 4 players", nameof(playersInOrder));
 
-        List<Card> cards = playedCards.ToList();
-        List<Player> players = playersInOrder.ToList();
-
-        var scoredCards = cards.Select((c, i) => new {
-            Card = c,
-            Player = players[i],
-            Score = ScoreCard(c, gameState.GetCardSectionInPlayZone(c) ?? HandSection.Hidden)
-        }).ToList();
-
-        var scoreGroups = scoredCards.GroupBy(x => x.Score).ToList();
-
-        if (scoreGroups.Any(g => g.Count() >= 3))
+        // Score every card once and keep the result alongside its owner.
+        // Using a small fixed-size array avoids heap-allocating a new List<T>.
+        var scored = new (Card Card, Player Player, int Score)[4];
+        for (int i = 0; i < 4; i++)
         {
-            foreach (var card in cards)
-                gameState.DiscardCard(card);
-            return (null, null);
+            scored[i] = (
+                playedCards[i],
+                playersInOrder[i],
+                ScoreCard(playedCards[i], gameState.GetCardSectionInPlayZone(playedCards[i]) ?? HandSection.Hidden)
+            );
         }
 
-        var untiedCards = new List<Card>();
-        var untiedPlayers = new List<Player>();
-
-        foreach (var group in scoreGroups)
+        // Count occurrences of each score to detect ties without a GroupBy allocation.
+        // A 3-or-4-way tie on any single score → discard all, no winner.
+        for (int i = 0; i < 4; i++)
         {
-            if (group.Count() == 2)
+            int count = 0;
+            for (int j = 0; j < 4; j++)
+                if (scored[j].Score == scored[i].Score) count++;
+            if (count >= 3)
             {
-                foreach (var item in group)
-                    gameState.DiscardCard(item.Card);
+                foreach (var entry in scored) gameState.DiscardCard(entry.Card);
+                return (null, null);
             }
-            else
+        }
+
+        // Discard paired (2-way tied) cards, collect the untied survivors.
+        // Reuse a small fixed-size buffer — max 4 untied entries.
+        var untied = new (Card Card, Player Player, int Score)[4];
+        int untiedCount = 0;
+
+        for (int i = 0; i < 4; i++)
+        {
+            bool isPaired = false;
+            for (int j = 0; j < 4; j++)
             {
-                foreach (var item in group)
+                if (i != j && scored[i].Score == scored[j].Score)
                 {
-                    untiedCards.Add(item.Card);
-                    untiedPlayers.Add(item.Player);
+                    isPaired = true;
+                    break;
                 }
             }
+            if (isPaired)
+                gameState.DiscardCard(scored[i].Card);
+            else
+                untied[untiedCount++] = scored[i];
         }
 
-        if (untiedCards.Count == 0)
+        if (untiedCount == 0)
             return (null, null);
 
-        var untiedScored = untiedCards.Select((c, i) => new {
-            Card = c,
-            Player = untiedPlayers[i],
-            Score = ScoreCard(c, gameState.GetCardSectionInPlayZone(c) ?? HandSection.Hidden)
-        }).ToList();
+        // Find the highest-scoring untied card — that player wins.
+        int bestIdx = 0;
+        for (int i = 1; i < untiedCount; i++)
+            if (untied[i].Score > untied[bestIdx].Score) bestIdx = i;
 
-        int maxScore = untiedScored.Max(x => x.Score);
-        var winner = untiedScored.First(x => x.Score == maxScore);
-
+        var winner = untied[bestIdx];
         gameState.DiscardCard(winner.Card);
-        untiedCards.Remove(winner.Card);
 
-        Card prizeCard = ResolvePrizeCard(untiedCards, gameState);
+        // Remaining untied cards compete for the prize (highest face value wins).
+        var remaining = new List<Card>(untiedCount - 1);
+        for (int i = 0; i < untiedCount; i++)
+            if (i != bestIdx) remaining.Add(untied[i].Card);
+
+        Card prizeCard = ResolvePrizeCard(remaining, gameState);
         return (winner.Player, prizeCard);
     }
 

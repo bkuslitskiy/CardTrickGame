@@ -49,7 +49,84 @@ class Player {
     }
 }
 
-let gameState = { players: [], round: 1, phase: '', starterId: 0, playZone: [], discards: [], isRunning: false, resolveInput: null, activePlayerId: null };
+// NOTE: `var` (not `let`) so the binding attaches to window and stays in sync
+// when ui.js reassigns it inside startGame(). Tests rely on window.gameState
+// always pointing at the live state object.
+var gameState = { players: [], round: 1, phase: '', starterId: 0, playZone: [], discards: [], isRunning: false, resolveInput: null, activePlayerId: null };
+
+/**
+ * Pure trick-resolution function.
+ *
+ * @param {Array<{card: Card, player: {id: number}, section: 'Hidden'|'Shown'}>} playZone
+ * @returns {{
+ *   winnerId: number|null,
+ *   prizeCard: Card|null,
+ *   valueTiedCards: Card[],   // cards eliminated in the value-tie step
+ *   scoreTiedCards: Card[]    // cards eliminated in the prize score-tie step
+ * }}
+ *
+ * Rules (from Basic rules.txt):
+ *   - Value ties of 2 cards: those 2 are discarded, remaining cards rescore.
+ *   - Value ties of 3 or 4 cards: the trick is void — nobody wins, no prize.
+ *   - Among the non-winner survivors, the highest faceValue is the prize.
+ *     If 2+ prize candidates tie on faceValue they're discarded and the
+ *     next-highest is taken.
+ */
+function determineTrick(playZone) {
+    const empty = { winnerId: null, prizeCard: null, valueTiedCards: [], scoreTiedCards: [] };
+    if (!playZone || playZone.length < 4) return empty;
+
+    // Evaluate Value (for the winner) and Score (for the prize).
+    const evaluated = playZone.map(p => ({
+        card:    p.card,
+        player:  p.player,
+        section: p.section,
+        value:   p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore,
+        score:   p.card.faceValue,
+    }));
+
+    const valueCounts = {};
+    evaluated.forEach(p => { valueCounts[p.value] = (valueCounts[p.value] || 0) + 1; });
+
+    // 3- or 4-way value ties void the entire trick — visually, every card is
+    // "cut" since per Basic rules every card is discarded and nobody wins.
+    if (Object.values(valueCounts).some(n => n >= 3)) {
+        return {
+            winnerId: null,
+            prizeCard: null,
+            valueTiedCards: evaluated.map(p => p.card),
+            scoreTiedCards: [],
+        };
+    }
+
+    // Cards eliminated by a 2-way value tie.
+    const valueTiedCards = evaluated.filter(p => valueCounts[p.value] === 2).map(p => p.card);
+
+    // Surviving cards are eligible to win or compete for the prize.
+    const survivors = evaluated.filter(p => valueCounts[p.value] === 1);
+    if (survivors.length === 0) {
+        return { winnerId: null, prizeCard: null, valueTiedCards, scoreTiedCards: [] };
+    }
+
+    // Winner = highest Value among survivors.
+    survivors.sort((a, b) => b.value - a.value);
+    const winnerEntry = survivors[0];
+
+    // Prize = highest Score among non-winner survivors, with score-ties discarded.
+    const prizePool = survivors.filter(p => p !== winnerEntry);
+    const scoreCounts = {};
+    prizePool.forEach(p => { scoreCounts[p.score] = (scoreCounts[p.score] || 0) + 1; });
+    const scoreTiedCards   = prizePool.filter(p => scoreCounts[p.score] >= 2).map(p => p.card);
+    const prizeCandidates  = prizePool.filter(p => scoreCounts[p.score] === 1);
+    prizeCandidates.sort((a, b) => b.score - a.score);
+
+    return {
+        winnerId:       winnerEntry.player.id,
+        prizeCard:      prizeCandidates[0]?.card || null,
+        valueTiedCards,
+        scoreTiedCards,
+    };
+}
 
 /** AI Logic Helpers **/
 function selectAITarget(player, validTargets) {
@@ -172,63 +249,79 @@ async function executePlayPhase() {
 
 async function executeDeterminePhase() {
     updateStatus(`Phase: Determine | Round: ${gameState.round}/13`);
-    
-    // Correct Trick Resolution Logic
-    const determineTrickWinner = () => {
-        if (gameState.playZone.length < 4) return { winner: null, prizeCard: null };
 
-        // 1. Evaluate Value (for winner) and Score (for prize)
-        const evaluated = gameState.playZone.map(p => ({
-            ...p,
-            value: p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore,
-            score: p.card.faceValue
-        }));
+    const { winnerId, prizeCard, valueTiedCards, scoreTiedCards } = determineTrick(gameState.playZone);
+    const winner = winnerId !== null
+        ? gameState.players.find(p => p.id === winnerId)
+        : null;
+    const winnerCard = winner
+        ? gameState.playZone.find(p => p.player.id === winnerId)?.card
+        : null;
 
-        // 2. Identify Value Ties
-        const valueCounts = {};
-        evaluated.forEach(p => valueCounts[p.value] = (valueCounts[p.value] || 0) + 1);
-        const survivors = evaluated.filter(p => valueCounts[p.value] === 1);
+    // -- Step 1: cut cards eliminated by value tie --
+    if (valueTiedCards.length > 0) {
+        setPrompt(valueTiedCards.length >= 3
+            ? `Three-way tie — trick is void.`
+            : `Value tie — those cards are eliminated.`);
+        valueTiedCards.forEach(c => decorateCard(c, 'cut'));
+        await delay(650);
+    }
 
-        if (survivors.length === 0) return { winner: null, prizeCard: null };
+    // -- Step 2: crown the winner --
+    if (winner && winnerCard) {
+        setPrompt(`${winner.name} wins the trick!`);
+        decorateCard(winnerCard, 'crown');
+        await delay(650);
+    }
 
-        // 3. Determine Winner (Highest remaining Value)
-        survivors.sort((a, b) => b.value - a.value);
-        const winnerEntry = survivors[0];
+    // -- Step 3: cut score-tied prize candidates --
+    if (scoreTiedCards.length > 0) {
+        setPrompt(`Prize candidates tied — eliminated.`);
+        scoreTiedCards.forEach(c => decorateCard(c, 'cut'));
+        await delay(650);
+    }
 
-        // 4. Determine Prize (Remaining survivors excluding winner's card)
-        const prizePool = survivors.filter(p => p !== winnerEntry);
-        const scoreCounts = {};
-        prizePool.forEach(p => scoreCounts[p.score] = (scoreCounts[p.score] || 0) + 1);
-        const prizeCandidates = prizePool.filter(p => scoreCounts[p.score] === 1);
+    // -- Step 4: coins on the prize card --
+    if (prizeCard) {
+        setPrompt(`${winner.name} claims ${prizeCard.name}!`);
+        decorateCard(prizeCard, 'coins');
+        await delay(500);
+    } else if (winner) {
+        setPrompt(`${winner.name} wins — no prize available.`);
+    } else if (valueTiedCards.length < 3) {
+        // Edge: two pair, no winner.
+        setPrompt(`Tie! No one wins the trick.`);
+    }
 
-        prizeCandidates.sort((a, b) => b.score - a.score);
-        return { winner: winnerEntry.player, prizeCard: prizeCandidates[0]?.card || null };
-    };
+    // -- Wait for the user to click anywhere to continue --
+    await new Promise(resolve => {
+        gameState.resolveInput = resolve;
+        document.addEventListener('click', function ack() {
+            document.removeEventListener('click', ack);
+            if (gameState.resolveInput) { gameState.resolveInput(); gameState.resolveInput = null; }
+        }, { once: true });
+    });
+    if (!gameState.isRunning) return;
 
-    let { winner, prizeCard } = determineTrickWinner();
-
+    // -- After the click: prize flies to winner, then score increments --
     if (winner && prizeCard) {
-        winner.scoringZone.push(prizeCard);
-        gameState.starterId = winner.id; 
-        setPrompt(`${winner.name} wins the trick and claims ${prizeCard.name}!`);
-        
-        // Animate the prize card flying to the winner
+        // Pre-rotate to the player who will lead next round (one seat
+        // counter-clockwise from the winner). executeScorePhase will NOT
+        // rotate again — this is the authoritative assignment for winner rounds.
+        gameState.starterId = (winner.id + 3) % 4;
         const prizeEntry = gameState.playZone.find(p => p.card === prizeCard);
         const cardEl = document.querySelector(`#play-slot-${prizeEntry.player.id} .card`);
         if (cardEl) await animatePrizeToWinner(winner.id, cardEl);
-    } else {
-        setPrompt(`Tie! No one wins the trick.`);
+        winner.scoringZone.push(prizeCard);
+    } else if (winner) {
+        // Winner but no prize: same rotation rule.
+        gameState.starterId = (winner.id + 3) % 4;
     }
-    renderAll();
-    
-    await new Promise(resolve => {
-        gameState.resolveInput = resolve;
-        document.addEventListener('click', function ack() { document.removeEventListener('click', ack); if(gameState.resolveInput) { gameState.resolveInput(); gameState.resolveInput = null; } }, { once: true });
-    });
-    if(!gameState.isRunning) return;
-    
+    // No else: no winner (all-tie) — starterId is intentionally left unchanged
+    // so the same player leads the next round (house rule: tie = replay).
+
     setPrompt(null);
-    gameState.playZone.forEach(p => { if(p.card !== prizeCard) gameState.discards.push(p.card); });
+    gameState.playZone.forEach(p => { if (p.card !== prizeCard) gameState.discards.push(p.card); });
     gameState.playZone = [];
     renderAll();
     gameState.phase = 'Score';
@@ -236,6 +329,25 @@ async function executeDeterminePhase() {
 
 function executeScorePhase() {
     gameState.round++;
-    gameState.starterId = (gameState.starterId + 3) % 4; // Counter-clockwise
+    // starterId was already set correctly in executeDeterminePhase:
+    //   • Winner present → (winner.id + 3) % 4  (one seat CCW from winner)
+    //   • No winner (all tied) → unchanged (same player leads again)
     gameState.phase = 'Reveal';
 }
+
+// -------------------------------------------------------------------------
+// Window exports for tests and cross-script access.
+// Class declarations and `let` bindings don't auto-attach to window in a
+// classic <script>, so we expose them explicitly. `gameState` is `var` above
+// and is already on window; `window.gameState` and the bare `gameState`
+// identifier therefore stay in sync when ui.js reassigns it.
+// -------------------------------------------------------------------------
+window.Suits           = Suits;
+window.Ranks           = Ranks;
+window.Card            = Card;
+window.Deck            = Deck;
+window.Player          = Player;
+window.determineTrick  = determineTrick;
+window.saveGame        = saveGame;
+window.clearSavedGame  = clearSavedGame;
+window.gameLoop        = gameLoop;

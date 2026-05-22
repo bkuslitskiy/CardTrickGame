@@ -26,6 +26,13 @@ async function loadApp(page) {
 /**
  * Click "Start New Game" with the current difficulty selections.
  * Resolves once the deal is complete (each player has 13 hidden cards).
+ *
+ * IMPORTANT: window.startGame() is async and awaits gameLoop(), which never
+ * resolves until the entire game ends. We deliberately do NOT return its
+ * promise from the page callback — otherwise page.evaluate would hang for
+ * the lifetime of the game. The synchronous portion of startGame() (deck
+ * shuffle, deal, renderAll) runs before the await, so by the time
+ * page.evaluate resolves the deal has already happened.
  */
 async function startGame(page, opts = {}) {
   if (opts.diff1) await page.selectOption('#diff-1', opts.diff1);
@@ -33,10 +40,11 @@ async function startGame(page, opts = {}) {
   if (opts.diff3) await page.selectOption('#diff-3', opts.diff3);
 
   await page.evaluate(() => {
-    // Drive startGame() directly: clicking the button works too, but going
-    // through the function bypasses any CSS issues with overlay z-index.
-    return window.startGame();
-  }).catch(() => {});
+    // Fire-and-forget. The `void` ensures we return undefined from this
+    // callback instead of the never-resolving gameLoop promise.
+    void window.startGame();
+  });
+
   // Wait for the deal to take effect on the gameState object.
   await page.waitForFunction(() =>
     window.gameState &&
