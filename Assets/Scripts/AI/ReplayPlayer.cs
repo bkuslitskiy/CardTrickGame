@@ -16,13 +16,21 @@ public class ReplayPlayer : IPlayer {
 
     public Card SelectCardToReveal(GameState gameState, int targetPlayerId) {
         var action = ReplayManager.Instance.GetNextAction(_playerId, ReplayActionType.RevealCard);
-        if (action == null) return gameState.GetValidRevealCards(gameState.GetPlayer(targetPlayerId)).FirstOrDefault();
-        return new Card(action.CardSuit, action.CardRank);
+        var validCards = gameState.GetValidRevealCards(gameState.GetPlayer(targetPlayerId));
+        if (action == null) return validCards.FirstOrDefault();
+        // Look up by suit+rank so we return the actual object in validCards,
+        // not a new Card instance that fails reference-equality checks in GameManager.
+        return validCards.FirstOrDefault(c => c.Suit == action.CardSuit && c.Rank == action.CardRank)
+               ?? validCards.FirstOrDefault();
     }
-    
+
     public Card SelectCardToPlay(GameState gameState) {
         var action = ReplayManager.Instance.GetNextAction(_playerId, ReplayActionType.PlayCard);
-        if (action == null) return gameState.GetValidPlayCards(gameState.GetPlayer(_playerId)).FirstOrDefault();
-        return new Card(action.CardSuit, action.CardRank);
+        var validCards = gameState.GetValidPlayCards(gameState.GetPlayer(_playerId));
+        if (action == null) return validCards.FirstOrDefault();
+        // Look up by suit+rank so we return the actual object in validCards,
+        // not a new Card instance that fails reference-equality checks in GameManager.
+        return validCards.FirstOrDefault(c => c.Suit == action.CardSuit && c.Rank == action.CardRank)
+               ?? validCards.FirstOrDefault();
     }
 }

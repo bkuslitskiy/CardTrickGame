@@ -129,38 +129,71 @@ function determineTrick(playZone) {
 }
 
 /** AI Logic Helpers **/
+
+/**
+ * Select which opponent to reveal a card from.
+ *
+ * Easy  — random opponent.
+ * Medium — opponent with fewest hidden cards (maximises known information).
+ * Hard  — opponent currently leading on score (disrupt the leader).
+ */
 function selectAITarget(player, validTargets) {
-    // Medium/Hard AI: Target the player with the fewest cards in Hidden hand (more info known)
     if (player.difficulty === 'Easy') {
         return validTargets[Math.floor(Math.random() * validTargets.length)].id;
     }
-    return [...validTargets].sort((a, b) => a.hiddenHand.length - b.hiddenHand.length)[0].id;
+    if (player.difficulty === 'Medium') {
+        return [...validTargets].sort((a, b) => a.hiddenHand.length - b.hiddenHand.length)[0].id;
+    }
+    // Hard: target the player with the highest score.
+    return [...validTargets].sort((a, b) => b.score - a.score)[0].id;
 }
 
+/**
+ * Select which card to play from validCards.
+ *
+ * Easy  — random.
+ * Medium — highest play-score card (greedy).
+ * Hard  —
+ *   Leading : 2nd-best by face value (don't telegraph the strongest card).
+ *   Following: spend the minimum play-score card that still wins;
+ *              if none wins, discard the lowest face-value card
+ *              (preserve prize potential).
+ *
+ * NOTE: winning cards are sorted by play score (hiddenScore / shownScore),
+ * NOT face value.  A Shown King has play score 5 but face value 13 — it is
+ * the cheapest possible winner and should be preferred over a 6♣ Hidden
+ * (play score 6) even though its face value is higher.
+ */
 function selectAICardToPlay(player, validCards) {
-    // Strategy based on Value (power) vs Score (points)
     if (player.difficulty === 'Easy') {
         return validCards[Math.floor(Math.random() * validCards.length)];
     }
 
-    const evaluated = validCards.map(c => ({
-        card: c,
-        value: player.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore,
-        score: c.faceValue
-    }));
+    // play-score helper: cards in hiddenHand use hiddenScore, others use shownScore.
+    const getScore = (c) => player.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore;
 
     if (player.difficulty === 'Medium') {
-        // Medium: Simply play the highest Value card
-        evaluated.sort((a, b) => b.value - a.value);
-    } else {
-        // Hard: Prioritize winning tricks with high Values, but preserve high Scores 
-        // if they don't think they can win the trick.
-        evaluated.sort((a, b) => {
-            if (b.value !== a.value) return b.value - a.value;
-            return a.score - b.score;
-        });
+        return [...validCards].sort((a, b) => getScore(b) - getScore(a))[0];
     }
-    return evaluated[0].card;
+
+    // Hard — leading (play zone is empty)
+    if (gameState.playZone.length === 0) {
+        const sorted = [...validCards].sort((a, b) => b.faceValue - a.faceValue);
+        return sorted.length > 1 ? sorted[1] : sorted[0];
+    }
+
+    // Hard — following
+    const maxInPlay = Math.max(
+        ...gameState.playZone.map(p =>
+            p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore)
+    );
+    const winningCards = validCards.filter(c => getScore(c) > maxInPlay);
+    if (winningCards.length > 0) {
+        // Cheapest winner by play score — preserves high face-value cards for prizes.
+        return winningCards.sort((a, b) => getScore(a) - getScore(b))[0];
+    }
+    // Can't win — discard lowest face-value card.
+    return [...validCards].sort((a, b) => a.faceValue - b.faceValue)[0];
 }
 
 function saveGame() {
@@ -342,12 +375,16 @@ function executeScorePhase() {
 // and is already on window; `window.gameState` and the bare `gameState`
 // identifier therefore stay in sync when ui.js reassigns it.
 // -------------------------------------------------------------------------
-window.Suits           = Suits;
-window.Ranks           = Ranks;
-window.Card            = Card;
-window.Deck            = Deck;
-window.Player          = Player;
-window.determineTrick  = determineTrick;
-window.saveGame        = saveGame;
-window.clearSavedGame  = clearSavedGame;
-window.gameLoop        = gameLoop;
+window.Suits              = Suits;
+window.Ranks              = Ranks;
+window.Card               = Card;
+window.Deck               = Deck;
+window.Player             = Player;
+window.determineTrick     = determineTrick;
+window.saveGame           = saveGame;
+window.clearSavedGame     = clearSavedGame;
+window.gameLoop           = gameLoop;
+// AI helpers — exported so Playwright tests (ai.spec.js) can call them directly.
+// These are the authoritative implementations; ai.js is now a stub.
+window.selectAITarget     = selectAITarget;
+window.selectAICardToPlay = selectAICardToPlay;

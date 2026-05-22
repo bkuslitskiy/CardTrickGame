@@ -1,32 +1,18 @@
 // AI behaviour tests: target selection and card-play strategy for all three
 // difficulty levels.
 //
-// ai.js doesn't export selectAITarget or selectAICardToPlay directly onto
-// window, so these tests exercise AI behaviour through integration: they drive
-// the Reveal or Play phase and observe gameState changes. Where determinism
-// matters we rig hand contents and score totals before running the phase.
+// selectAITarget and selectAICardToPlay are defined in engine.js and exported
+// as window.selectAITarget / window.selectAICardToPlay from the same file.
+// ai.js is now a stub — no AI logic lives there.
 //
-// Prerequisites (window globals expected from engine.js / ai.js / ui.js):
+// Prerequisites (window globals from engine.js / ui.js):
 //   window.Card, window.Player, window.Deck, window.gameState
 //   window.startGame({ humanId: -1 })   — starts an all-AI game
-//   window.executeRevealPhase()          — runs one reveal step (if exported)
-//   window.selectAITarget                — exposed for unit testing (needs export)
-//   window.selectAICardToPlay            — exposed for unit testing (needs export)
+//   window.selectAITarget               — exported from engine.js
+//   window.selectAICardToPlay           — exported from engine.js
 
 const { test, expect } = require('@playwright/test');
 const { loadApp, startGame } = require('./helpers');
-
-// ---------------------------------------------------------------------------
-// NOTE: selectAITarget and selectAICardToPlay are currently private functions
-// in ai.js. The tests in the "Unit — direct calls" describe blocks require
-// those functions to be exported to window, e.g.:
-//
-//   window.selectAITarget    = selectAITarget;
-//   window.selectAICardToPlay = selectAICardToPlay;
-//
-// Add those two lines near the bottom of ai.js (alongside the other window.*
-// assignments, if any). The integration tests below work without that change.
-// ---------------------------------------------------------------------------
 
 // ── Unit tests: selectAITarget ───────────────────────────────────────────────
 
@@ -233,7 +219,7 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
     const result = await page.evaluate(() => {
       const C = (s, r) => new window.Card(s, r);
       // Leader played hiddenScore 8 (rank 8 hidden). AI holds hidden 9, 11, 14.
-      // Minimum winner by face value = rank 9.
+      // All three beat the leader. Minimum winner by PLAY score = rank 9 (score 9).
       const leader = C('♥', 8);
       const c9  = C('♣', 9);
       const c11 = C('♦', 11);
@@ -246,7 +232,38 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
       const chosen = window.selectAICardToPlay(ai, [c9, c11, c14]);
       return chosen.rank;
     });
-    expect(result).toBe(9); // minimum that beats play-score 8
+    expect(result).toBe(9); // minimum play-score winner
+  });
+
+  test('prefers Shown King (play score 5) over 6♣ Hidden (play score 6) as minimum winner', async ({ page }) => {
+    // This is the key regression test for the play-score sort bug.
+    // Before the fix, winning cards were sorted by faceValue (K=13 > 6),
+    // causing the AI to wrongly discard the 6 and play the King as winner.
+    // After the fix, they are sorted by play score (K Shown=5 < 6 Hidden=6),
+    // so the Shown King is correctly chosen as the cheaper winner.
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      // Leader played 4 Hidden (play score 4). Both Shown King (score 5) and
+      // 6 Hidden (score 6) beat it. Shown King is the cheaper winner.
+      const leader = C('♥', 4);
+      const kg = C('♣', 13); // King  — shown, shownScore = 5, faceValue = 13
+      const c6 = C('♦', 6);  // Six   — hidden, hiddenScore = 6, faceValue = 6
+      const c9 = C('♠', 9);  // Nine  — hidden, hiddenScore = 9, faceValue = 9
+      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
+                   hiddenHand: [c6, c9], shownHand: [kg] };
+      window.gameState.playZone = [
+        { card: leader, player: window.gameState.players[1], section: 'Hidden' },
+      ];
+      const chosen = window.selectAICardToPlay(ai, [kg, c6, c9]);
+      return { rank: chosen.rank, score: chosen.shownScore ?? chosen.hiddenScore };
+    });
+    // Shown King has play score 5 — cheapest winner, should be chosen.
+    expect(result.rank).toBe(13);
+    expect(result.score).toBe(5);
   });
 
   test('plays lowest face-value card when it cannot win', async ({ page }) => {

@@ -7,7 +7,6 @@
 const http = require('http');
 const fs   = require('fs');
 const path = require('path');
-const url  = require('url');
 
 const PORT = Number(process.argv[2]) || 4173;
 const ROOT = path.resolve(__dirname, '..');
@@ -34,7 +33,7 @@ function safeJoin(root, urlPath) {
 }
 
 const server = http.createServer((req, res) => {
-  const parsed = url.parse(req.url);
+  const parsed = new URL(req.url, 'http://localhost');
   let target = safeJoin(ROOT, parsed.pathname || '/');
 
   if (target === null) {
