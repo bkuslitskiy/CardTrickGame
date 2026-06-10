@@ -1,6 +1,26 @@
 const Suits = { CLUBS: '♣', DIAMONDS: '♦', HEARTS: '♥', SPADES: '♠' };
 const Ranks = { 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
-const delay = ms => new Promise(res => setTimeout(res, ms));
+
+// All animation/AI pacing waits route through delay() and scale by
+// window.SPEED (default 1). Tests set window.SPEED = 0 to run the game loop
+// at full speed instead of real-time.
+const delay = ms => new Promise(res => setTimeout(res, ms * (window.SPEED ?? 1)));
+
+// Game randomness (shuffle, reveal pick, Easy AI) routes through rng() so
+// tests can install a deterministic sequence. setSeed(n) swaps in a
+// mulberry32 PRNG; setSeed(null) restores Math.random.
+let _rng = Math.random;
+function rng() { return _rng(); }
+function setSeed(seed) {
+    if (seed === null || seed === undefined) { _rng = Math.random; return; }
+    let a = seed >>> 0;
+    _rng = function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
 
 class Card {
     constructor(suit, rank) { this.suit = suit; this.rank = rank; }
@@ -26,7 +46,7 @@ class Deck {
     }
     shuffle() {
         for (let i = this.cards.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = Math.floor(rng() * (i + 1));
             [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
         }
     }
@@ -139,7 +159,7 @@ function determineTrick(playZone) {
  */
 function selectAITarget(player, validTargets) {
     if (player.difficulty === 'Easy') {
-        return validTargets[Math.floor(Math.random() * validTargets.length)].id;
+        return validTargets[Math.floor(rng() * validTargets.length)].id;
     }
     if (player.difficulty === 'Medium') {
         return [...validTargets].sort((a, b) => a.hiddenHand.length - b.hiddenHand.length)[0].id;
@@ -166,7 +186,7 @@ function selectAITarget(player, validTargets) {
  */
 function selectAICardToPlay(player, validCards) {
     if (player.difficulty === 'Easy') {
-        return validCards[Math.floor(Math.random() * validCards.length)];
+        return validCards[Math.floor(rng() * validCards.length)];
     }
 
     // play-score helper: cards in hiddenHand use hiddenScore, others use shownScore.
@@ -196,12 +216,20 @@ function selectAICardToPlay(player, validCards) {
     return [...validCards].sort((a, b) => a.faceValue - b.faceValue)[0];
 }
 
+// Bump when the save shape changes; loadSavedGame rejects other versions.
+const SAVE_VERSION = 1;
+
 function saveGame() {
     if (!gameState.isRunning) return;
-    localStorage.setItem('cardGameState', JSON.stringify({
-        players: gameState.players, round: gameState.round, phase: gameState.phase,
-        starterId: gameState.starterId, playZone: gameState.playZone, discards: gameState.discards
-    }));
+    try {
+        localStorage.setItem('cardGameState', JSON.stringify({
+            version: SAVE_VERSION,
+            players: gameState.players, round: gameState.round, phase: gameState.phase,
+            starterId: gameState.starterId, playZone: gameState.playZone, discards: gameState.discards
+        }));
+    } catch (e) {
+        // Quota exceeded or storage disabled — the game continues unsaved.
+    }
 }
 
 function clearSavedGame() { localStorage.removeItem('cardGameState'); }
@@ -234,7 +262,7 @@ async function executeRevealPhase() {
             await delay(600);
         }
         let targetPlayer = gameState.players.find(p => p.id === targetId);
-        let rIndex = Math.floor(Math.random() * targetPlayer.hiddenHand.length);
+        let rIndex = Math.floor(rng() * targetPlayer.hiddenHand.length);
         let card = targetPlayer.hiddenHand.splice(rIndex, 1)[0];
         
         card.isRevealing = true; // Triggers CSS flip animation
@@ -326,13 +354,28 @@ async function executeDeterminePhase() {
         setPrompt(`Tie! No one wins the trick.`);
     }
 
-    // -- Wait for the user to click anywhere to continue --
+    // -- Wait for the user to click (or press Enter/Space) to continue --
+    // The listeners are removed by finish() no matter HOW the wait ends —
+    // real click, keypress, or a test/showMenu calling resolveInput directly.
+    // Otherwise stale listeners pile up and could mis-fire into a later
+    // resolveInput (e.g. a human card-play prompt).
     await new Promise(resolve => {
-        gameState.resolveInput = resolve;
-        document.addEventListener('click', function ack() {
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
             document.removeEventListener('click', ack);
-            if (gameState.resolveInput) { gameState.resolveInput(); gameState.resolveInput = null; }
-        }, { once: true });
+            document.removeEventListener('keydown', ack);
+            if (gameState.resolveInput === finish) gameState.resolveInput = null;
+            resolve();
+        };
+        const ack = (e) => {
+            if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+            finish();
+        };
+        gameState.resolveInput = finish;
+        document.addEventListener('click', ack);
+        document.addEventListener('keydown', ack);
     });
     if (!gameState.isRunning) return;
 
@@ -388,3 +431,7 @@ window.gameLoop           = gameLoop;
 // These are the authoritative implementations; ai.js is now a stub.
 window.selectAITarget     = selectAITarget;
 window.selectAICardToPlay = selectAICardToPlay;
+// Determinism hook for tests: setSeed(n) makes shuffle/reveal/Easy-AI
+// reproducible; setSeed(null) restores Math.random.
+window.setSeed            = setSeed;
+window.SAVE_VERSION       = SAVE_VERSION;

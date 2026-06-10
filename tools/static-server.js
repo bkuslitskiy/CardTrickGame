@@ -24,11 +24,22 @@ const MIME = {
 };
 
 function safeJoin(root, urlPath) {
-  // Decode and strip any query string.
-  const decoded = decodeURIComponent(urlPath.split('?')[0]);
-  // Normalize to prevent .. traversal escaping ROOT.
+  // Decode and strip any query string. Malformed escapes (e.g. "/%") throw —
+  // treat them as a bad request rather than crashing the server.
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath.split('?')[0]);
+  } catch (e) {
+    return null;
+  }
+  // Normalize to prevent .. traversal escaping ROOT. Compare against
+  // root + separator so a sibling directory like "<root>-other" can't pass
+  // a bare startsWith(root) check.
   const resolved = path.normalize(path.join(root, decoded));
-  if (!resolved.startsWith(root)) return null;
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+  // Deny dotfiles and dot-directories (.git, .vscode, …) anywhere in the path.
+  const rel = path.relative(root, resolved);
+  if (rel.split(path.sep).some(part => part.startsWith('.'))) return null;
   return resolved;
 }
 
@@ -60,7 +71,9 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+// Bind to loopback only — this serves the whole repo, so it must never be
+// reachable from the LAN.
+server.listen(PORT, '127.0.0.1', () => {
   // eslint-disable-next-line no-console
   console.log(`[static-server] serving ${ROOT} on http://localhost:${PORT}`);
 });

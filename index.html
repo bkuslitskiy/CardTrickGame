@@ -9,7 +9,7 @@
 <body class="game-wrapper">
     <header>
         <div class="title">Trick-Taking Card Game</div>
-        <div id="status-text">Phase: Setup | Round: 1/13</div>
+        <div id="status-text" role="status" aria-live="polite">Phase: Setup | Round: 1/13</div>
         <div>
             <button onclick="showRules()" class="btn-accent" style="margin-right: 10px;">Rules</button>
             <button onclick="showMenu()" class="btn-danger">Abandon Game</button>
@@ -64,7 +64,7 @@
     </div>
 
     <div id="game-board" class="game-container">
-        <div id="prompt-overlay"></div>
+        <div id="prompt-overlay" role="status" aria-live="assertive"></div>
         
         <div id="play-zone" class="play-zone">
             <div id="play-slot-2" class="play-slot"></div>
