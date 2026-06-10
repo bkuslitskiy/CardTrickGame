@@ -84,6 +84,7 @@ select { font-family: inherit; }
 .game-wrapper {
     width: 100vw;
     height: 100vh;
+    height: 100dvh; /* use dynamic viewport height on mobile to exclude browser chrome */
     display: flex;
     flex-direction: column;
     background: transparent;
@@ -243,6 +244,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     flex: 1 1 auto;
     width: 100%;
     height: calc(100vh - var(--header-h));
+    height: calc(100dvh - var(--header-h));
     overflow: hidden;
 }
 
@@ -678,10 +680,15 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
         --header-h: 50px;
     }
 
-    header { padding: 0 8px; gap: 6px; flex-wrap: wrap; }
-    header .title { font-size: 12px; line-height: 1.15; max-width: 90px; }
-    #status-text  { font-size: 10px; line-height: 1.15; text-align: center; }
-    header button { font-size: 11px; padding: 4px 8px; }
+    /* Keep header on one row — hide the title to free space for status + buttons */
+    header { padding: 0 8px; gap: 6px; flex-wrap: nowrap; align-items: center; }
+    header .title { display: none; }
+    #status-text  {
+        font-size: 10px; line-height: 1.15;
+        flex: 1 1 0; min-width: 0;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    header button { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
 
     .play-zone {
         width: 170px;
@@ -717,6 +724,20 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
        mobile override needed — 130px comfortably fits the badge text and
        still leaves ~350px of central play-zone room on a 480px viewport. */
 
+    /* Cap East/West vertical hand heights so they don't dominate the screen.
+       The area is vertically centred at 50% of the game container, so a
+       250px total height spans only ~125px above and below the midpoint —
+       leaving plenty of room for the play zone and North/South hands. */
+    .player-area.west,
+    .player-area.east {
+        max-height: 250px;
+    }
+    .player-area.west .hand-container.vertical-hand,
+    .player-area.east .hand-container.vertical-hand {
+        max-height: 108px;   /* fits ~6 visible cards at 54px + 12px stride */
+        overflow: hidden;
+    }
+
     /* Card content scales with the smaller card body. */
     .card .card-top    { font-size: 9px;  top: 3px; left: 4px; }
     .card .card-center { font-size: 18px; }
@@ -735,4 +756,60 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     .modal-box h2 { font-size: 18px; }
     .modal-box p  { font-size: 12px; }
     .difficulty-row { font-size: 12px; }
+}
+
+/* -------------------------------------------------------------------------
+   15. Landscape / very short viewport  (e.g. Galaxy S22 Ultra rotated)
+   Strategy: the game container is only ~300px tall, so North and South
+   player hands are hidden — only the info badge is shown. This keeps the
+   layout from collapsing: North badge at top, play zone in centre, South
+   badge at bottom, East/West columns at the sides.
+   ------------------------------------------------------------------------- */
+@media (max-height: 480px) {
+    :root {
+        --card-w: 40px;
+        --card-h: 56px;
+        --card-stride: 22px;
+        --card-stride-v: 12px;
+        --header-h: 44px;
+    }
+
+    header { padding: 0 8px; gap: 4px; flex-wrap: nowrap; }
+    header .title { display: none; }
+    #status-text  { font-size: 10px; flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    header button { font-size: 10px; padding: 3px 6px; white-space: nowrap; flex-shrink: 0; }
+
+    /* Hide North/South card rows — only keep the info badge visible.
+       The game container is too short (~300 px) to fit two full hands,
+       the play zone, and clearance above/below without overlap. */
+    .player-area.north .hand-container,
+    .player-area.south .hand-container { display: none; }
+
+    /* Info badges stay readable but compact */
+    .player-info { font-size: 10px; padding: 3px 10px; }
+    .player-area { gap: 2px; }
+
+    /* Shrink the play zone so it fits comfortably between the two badges */
+    .play-zone { width: 150px; height: 120px; }
+
+    /* Lift the prompt to just below the header rather than above the zone */
+    #prompt-overlay {
+        top: 8px;
+        font-size: 10px;
+        padding: 4px 12px;
+        max-width: calc(100vw - 180px); /* avoid overlapping E/W badges */
+    }
+
+    /* East/West: tighten the column height for the short viewport */
+    .player-area.west,
+    .player-area.east { max-height: 200px; }
+    .player-area.west .hand-container.vertical-hand,
+    .player-area.east .hand-container.vertical-hand { max-height: 80px; overflow: hidden; }
+
+    /* Scale card content for the compact cards */
+    .card .card-top    { font-size: 9px; top: 3px; left: 4px; }
+    .card .card-center { font-size: 18px; }
+    .card .card-modifier { font-size: 6px; bottom: 2px; right: 2px; }
+    .card-crown { width: 18px; height: 14px; }
+    .card-coins { width: 18px; height: 16px; }
 }
