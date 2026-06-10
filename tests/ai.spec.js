@@ -296,68 +296,78 @@ test.describe('Round starter advancement', () => {
   // These tests run an all-AI game and observe starterId changes between rounds.
 
   test('starterId moves to (winner + 3) % 4 after a round with a winner', async ({ page }) => {
+    // Run a real all-AI round. While round 1's trick is paused on its
+    // click-wait, the play zone is still intact — capture determineTrick's
+    // verdict for it, dismiss the wait, and check the starterId the engine
+    // actually wrote against that verdict.
     await loadApp(page);
-    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.evaluate(() => {
+      window.SPEED = 0;
+      void window.startGame({ humanId: -1 });
+    });
     await page.waitForFunction(() => window.gameState?.isRunning);
 
-    // Auto-dismiss determine-phase prompts so the loop keeps running.
-    await page.evaluate(() => {
-      window.__auto = setInterval(() => {
+    const result = await page.evaluate(() => new Promise(resolve => {
+      const before = window.gameState.starterId;
+      const iv = setInterval(() => {
         const r = window.gameState?.resolveInput;
         if (typeof r === 'function') {
+          clearInterval(iv);
+          const verdict = window.determineTrick(window.gameState.playZone);
           window.gameState.resolveInput = null;
-          try { r(); } catch (_) {}
+          r();
+          // Round 2 blocks on its own (never-dismissed) click-wait, so by
+          // the time this fires, starterId holds round 1's assignment.
+          setTimeout(() => resolve({
+            before,
+            winnerId: verdict.winnerId,
+            after: window.gameState.starterId,
+          }), 300);
         }
-      }, 30);
-    });
+      }, 20);
+    }));
 
-    // Wait for round to advance to 2 (meaning round 1's trick resolved).
-    await page.waitForFunction(() => window.gameState.round >= 2, null, { timeout: 30_000 });
-
-    const ok = await page.evaluate(() => {
-      clearInterval(window.__auto);
-      // engine.js sets starterId = (winner.id + 3) % 4 inside
-      // executeDeterminePhase when a winner exists; executeScorePhase no
-      // longer touches starterId. We can't recover the round-1 winner after
-      // the fact, so smoke-test that starterId is a valid seat index.
-      const id = window.gameState.starterId;
-      return id >= 0 && id <= 3;
-    });
-    expect(ok).toBe(true);
+    if (result.winnerId !== null) {
+      expect(result.after).toBe((result.winnerId + 3) % 4);
+    } else {
+      expect(result.after).toBe(result.before); // tie → same leader again
+    }
   });
 
   test('starterId is unchanged after a round with no winner (all tied)', async ({ page }) => {
-    // Rig a game state where all 4 play zone cards tie so there is no winner.
-    // Then call executeScorePhase (or the equivalent) and check starterId.
+    // Drive the REAL executeDeterminePhase against a hand-built 4-way tie
+    // (no gameLoop running) and assert the engine leaves starterId alone.
     await loadApp(page);
-    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
-    await page.waitForFunction(() => window.gameState?.isRunning);
 
-    const result = await page.evaluate(() => {
-      window.gameState.isRunning = false; // pause the game loop
-
-      // Build a 4-way tie: all play same rank hidden (hiddenScore = rank)
+    const result = await page.evaluate(async () => {
+      window.SPEED = 0;
       const C = (s, r) => new window.Card(s, r);
-      const ps = window.gameState.players;
-      window.gameState.playZone = [
-        { card: C('♣', 7), player: ps[0], section: 'Hidden' },
-        { card: C('♦', 7), player: ps[1], section: 'Hidden' },
-        { card: C('♥', 7), player: ps[2], section: 'Hidden' },
-        { card: C('♠', 7), player: ps[3], section: 'Hidden' },
+      const players = [
+        new window.Player(0, 'South', false, 'Easy'),
+        new window.Player(1, 'West',  false, 'Easy'),
+        new window.Player(2, 'North', false, 'Easy'),
+        new window.Player(3, 'East',  false, 'Easy'),
       ];
-      window.gameState.phase = 'Determine';
-      window.gameState.starterId = 2; // explicitly set starter to player 2
-
-      const outcome = window.determineTrick(window.gameState.playZone);
-      // If no winner, engine should leave starterId unchanged (same player
-      // leads again). executeDeterminePhase only rotates when there IS a winner:
-      //   starterId = (winner.id + 3) % 4
-      // executeScorePhase no longer touches starterId at all.
-      if (outcome.winnerId !== null && outcome.winnerId !== undefined) {
-        window.gameState.starterId = (outcome.winnerId + 3) % 4;
-      }
-      // else: starterId stays at 2 (no winner → same player leads)
-
+      window.gameState = {
+        players,
+        activePlayerId: null,
+        round: 1, phase: 'Determine', starterId: 2,
+        playZone: [
+          { card: C('♣', 7), player: players[0], section: 'Hidden' },
+          { card: C('♦', 7), player: players[1], section: 'Hidden' },
+          { card: C('♥', 7), player: players[2], section: 'Hidden' },
+          { card: C('♠', 7), player: players[3], section: 'Hidden' },
+        ],
+        discards: [],
+        isRunning: true, resolveInput: null,
+      };
+      window.renderPlayZone();
+      const ack = setInterval(() => {
+        const r = window.gameState.resolveInput;
+        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
+      }, 5);
+      await window.executeDeterminePhase();
+      clearInterval(ack);
       return window.gameState.starterId;
     });
     expect(result).toBe(2); // unchanged — same player leads again
@@ -369,7 +379,10 @@ test.describe('Round starter advancement', () => {
 test.describe('Game progression invariants', () => {
   test('round counter increments by 1 after each trick resolves', async ({ page }) => {
     await loadApp(page);
-    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.evaluate(() => {
+      window.SPEED = 0; // run the loop at full speed — we only check counters
+      void window.startGame({ humanId: -1 });
+    });
     await page.waitForFunction(() => window.gameState?.isRunning);
 
     await page.evaluate(() => {
@@ -396,28 +409,28 @@ test.describe('Game progression invariants', () => {
     await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
     await page.waitForFunction(() => window.gameState?.isRunning);
 
-    // Snapshot before round 1 resolves.
+    // Snapshot before round 1 resolves. At normal speed the first AI play is
+    // ~1.4s away (600ms reveal + 800ms play), so this lands pre-play; only
+    // after the snapshot do we drop to SPEED=0 to finish the round fast.
     const before = await page.evaluate(() =>
       window.gameState.players.map(p => p.hiddenHand.length + p.shownHand.length));
 
-    await page.evaluate(() => {
-      window.__auto = setInterval(() => {
-        const r = window.gameState?.resolveInput;
-        if (typeof r === 'function') {
-          window.gameState.resolveInput = null;
-          try { r(); } catch (_) {}
-        }
-      }, 30);
-    });
+    await page.evaluate(() => { window.SPEED = 0; });
 
-    await page.waitForFunction(() => window.gameState.round >= 2, null, { timeout: 30_000 });
+    // Park at round 1's Determine click-wait: all four cards have been played
+    // and nothing moves until the wait is dismissed, so the read is stable.
+    // (Don't auto-dismiss — with SPEED=0, round 2's plays would race the read.)
+    await page.waitForFunction(() =>
+      window.gameState.phase === 'Determine' &&
+      typeof window.gameState.resolveInput === 'function',
+      null, { timeout: 30_000 });
 
-    const after = await page.evaluate(() => {
-      clearInterval(window.__auto);
-      return window.gameState.players.map(p => p.hiddenHand.length + p.shownHand.length);
-    });
+    const after = await page.evaluate(() =>
+      window.gameState.players.map(p => p.hiddenHand.length + p.shownHand.length));
 
-    // Each player should have exactly 1 fewer card in hand after round 1.
+    // Each player should have exactly 1 fewer card in hand after one round of
+    // play (the played card is out of the hand; the prize goes to the
+    // scoring zone, never back to a hand).
     before.forEach((count, i) => {
       expect(after[i]).toBe(count - 1);
     });
@@ -432,6 +445,7 @@ test.describe('Game progression invariants', () => {
     // resolveInput.
     await loadApp(page);
     await page.evaluate(() => {
+      window.SPEED = 0;
       void window.startGame({ humanId: -1 });
       window.__auto = setInterval(() => {
         const r = window.gameState?.resolveInput;
@@ -442,20 +456,21 @@ test.describe('Game progression invariants', () => {
       }, 30);
     });
 
-    // Wait until round ≥ 2 AND playZone is empty simultaneously.
-    // This condition is always true during the Reveal phase of round 2+
-    // (executeDeterminePhase empties the zone before advancing the round counter).
-    await page.waitForFunction(
-      () => window.gameState.round >= 2 && window.gameState.playZone.length === 0,
+    // Wait until round ≥ 2 AND playZone is empty simultaneously, and capture
+    // that observation so the assertion below is on real data (the truthy
+    // object is what waitForFunction resolves with).
+    const observed = await page.waitForFunction(
+      () => window.gameState.round >= 2 && window.gameState.playZone.length === 0
+        && { round: window.gameState.round, playZoneSize: window.gameState.playZone.length },
       null,
       { timeout: 30_000 }
     );
+    const snapshot = await observed.jsonValue();
 
     await page.evaluate(() => clearInterval(window.__auto));
 
-    // If waitForFunction resolved, the condition was met — play zone was empty
-    // between rounds. No additional assertion needed.
-    expect(true).toBe(true);
+    expect(snapshot.playZoneSize).toBe(0);
+    expect(snapshot.round).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -1,8 +1,8 @@
 # Card Game — Webapp Test Suite
 
-These tests are a behavioural **spec** for the JS rewrite of the card game. They
-are expected to fail until the rewrite is complete — read each failing test as
-a contract the rebuilt code has to honour.
+These tests are the behavioural **spec** for the JS card game. The rewrite is
+complete and the suite is expected to pass in full — a failing test means a
+contract regression. They also run in CI (`.github/workflows/tests.yml`).
 
 ## Setup
 
@@ -47,10 +47,21 @@ The tests rely on these being attached to `window`:
 - `window.Card`, `window.Deck`, `window.Player`            (data classes)
 - `window.gameState`                                       (live state object)
 - `window.startGame()`, `window.resumeGame()`, `window.showMenu()`, `window.endGame()`
-- **`window.determineTrick(playZone)`** — *NEW*. Pure function returning
-  `{ winnerId: number | null, prizeCard: Card | null }`. The current
-  algorithm is buried inside `executeDeterminePhase` as a closure; the
-  rewrite should hoist it so it's testable in isolation.
+- `window.determineTrick(playZone)` — pure trick resolver returning
+  `{ winnerId, prizeCard, valueTiedCards, scoreTiedCards }`
+- `window.selectAITarget`, `window.selectAICardToPlay`     (AI strategy)
+- `window.SAVE_VERSION` — current save-payload schema version
+
+## Test hooks
+
+- **`window.SPEED`** — multiplier applied to every `delay()` in engine.js.
+  Default `1` (real-time animations). Tests that drive whole rounds or full
+  games set `window.SPEED = 0` *before* calling `startGame()` so the loop
+  runs at full speed. Leave it at 1 in tests that observe animation timing
+  (e.g. the active-turn highlight sweep).
+- **`window.setSeed(n)`** — installs a deterministic PRNG (mulberry32) behind
+  the deck shuffle, the reveal pick, and Easy-AI choices, so deals are
+  reproducible. `setSeed(null)` restores `Math.random`.
 
 ## Known-ambiguous rules pinned by these tests
 

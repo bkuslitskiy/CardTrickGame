@@ -256,25 +256,106 @@ test.describe('Trick resolution', () => {
 });
 
 test.describe('Round starter rotation', () => {
+  // These drive the real executeDeterminePhase against a hand-built gameState
+  // (no gameLoop running, so there is nothing to race against) and assert on
+  // the starterId the engine actually writes.
   test.beforeEach(async ({ page }) => { await loadApp(page); });
 
-  test('starter advances counter-clockwise: (winnerId + 3) % 4', async ({ page }) => {
-    // The current engine.js scoring step does `starterId = (starterId + 3) % 4`
-    // *after* a trick. This test pins that contract — the rewrite must keep it
-    // (or update Basic rules.txt + this test together).
-    const got = await page.evaluate(() => {
-      const out = [];
-      for (let winner = 0; winner < 4; winner++) {
-        out.push({ winner, nextStarter: (winner + 3) % 4 });
-      }
-      return out;
+  // Builds a gameState where `winnerSeat` plays the lone Ace, runs the
+  // Determine phase to completion (auto-acking the click-wait), and returns
+  // the resulting starterId. SPEED=0 collapses the animation delays.
+  async function runDetermineWithWinner(page, winnerSeat) {
+    return page.evaluate(async (seat) => {
+      window.SPEED = 0;
+      const C = (s, r) => new window.Card(s, r);
+      const players = [
+        new window.Player(0, 'South', false, 'Easy'),
+        new window.Player(1, 'West',  false, 'Easy'),
+        new window.Player(2, 'North', false, 'Easy'),
+        new window.Player(3, 'East',  false, 'Easy'),
+      ];
+      const suits = ['♣', '♦', '♥', '♠'];
+      const loserRanks = [5, 7, 9];
+      let k = 0;
+      window.gameState = {
+        players,
+        activePlayerId: null,
+        round: 1, phase: 'Determine', starterId: 0,
+        playZone: players.map(p => ({
+          card: C(suits[p.id], p.id === seat ? 14 : loserRanks[k++]),
+          player: p, section: 'Hidden',
+        })),
+        discards: [],
+        isRunning: true, resolveInput: null,
+      };
+      window.renderPlayZone();
+      const ack = setInterval(() => {
+        const r = window.gameState.resolveInput;
+        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
+      }, 5);
+      await window.executeDeterminePhase();
+      clearInterval(ack);
+      return window.gameState.starterId;
+    }, winnerSeat);
+  }
+
+  for (let winner = 0; winner < 4; winner++) {
+    test(`winner at seat ${winner} → engine sets starterId to ${(winner + 3) % 4}`, async ({ page }) => {
+      const starterId = await runDetermineWithWinner(page, winner);
+      expect(starterId).toBe((winner + 3) % 4);
     });
-    expect(got).toEqual([
-      { winner: 0, nextStarter: 3 },
-      { winner: 1, nextStarter: 0 },
-      { winner: 2, nextStarter: 1 },
-      { winner: 3, nextStarter: 2 },
-    ]);
+  }
+
+  test('no winner (4-way tie) → engine leaves starterId unchanged', async ({ page }) => {
+    const starterId = await page.evaluate(async () => {
+      window.SPEED = 0;
+      const C = (s, r) => new window.Card(s, r);
+      const players = [
+        new window.Player(0, 'South', false, 'Easy'),
+        new window.Player(1, 'West',  false, 'Easy'),
+        new window.Player(2, 'North', false, 'Easy'),
+        new window.Player(3, 'East',  false, 'Easy'),
+      ];
+      window.gameState = {
+        players,
+        activePlayerId: null,
+        round: 1, phase: 'Determine', starterId: 2,
+        playZone: players.map((p, i) => ({
+          card: C(['♣', '♦', '♥', '♠'][i], 7), player: p, section: 'Hidden',
+        })),
+        discards: [],
+        isRunning: true, resolveInput: null,
+      };
+      window.renderPlayZone();
+      const ack = setInterval(() => {
+        const r = window.gameState.resolveInput;
+        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
+      }, 5);
+      await window.executeDeterminePhase();
+      clearInterval(ack);
+      return window.gameState.starterId;
+    });
+    expect(starterId).toBe(2);
+  });
+});
+
+test.describe('Deterministic RNG (setSeed)', () => {
+  test.beforeEach(async ({ page }) => { await loadApp(page); });
+
+  test('setSeed(n) makes two shuffles identical; setSeed(null) restores randomness', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const order = () => new window.Deck().cards.map(c => `${c.suit}${c.rank}`).join(',');
+      window.setSeed(123);
+      const a = order();
+      window.setSeed(123);
+      const b = order();
+      window.setSeed(null);
+      const c = order();
+      const d = order();
+      return { seededMatch: a === b, unseededMatch: c === d };
+    });
+    expect(result.seededMatch).toBe(true);
+    expect(result.unseededMatch).toBe(false);
   });
 });
 
