@@ -5,6 +5,7 @@
   "description": "Browser-based trick-taking card game. Companion test suite for the JS rewrite.",
   "scripts": {
     "serve": "node tools/static-server.js",
+    "simulate": "node tools/simulate.js --calibrate",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",

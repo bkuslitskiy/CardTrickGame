@@ -24,12 +24,13 @@ track.*
 
 ## Webapp — next up
 
-- [ ] **AI strategy calibration** *(design decision needed)*: Easy/Medium/Hard
-  are implemented but untuned. Hard's only leading heuristic is "play the
-  2nd-best face value", which tests currently pin. Decide target win-rates
-  per difficulty, then run seeded AI-vs-AI batches (`setSeed` + `SPEED=0`
-  make this cheap) and adjust. Update `tests/ai.spec.js` alongside any
-  behaviour change.
+- [x] **AI strategy calibration** *(done June 10, 2026)*: difficulties are
+  calibrated blends of pure strategies, tuned with the headless simulator
+  (`npm run simulate`) to the agreed targets — a Master-grade reference
+  player beats an Easy table 67% of the time, splits with Medium, and loses
+  to Hard 67% of the time; the new **Master** difficulty is the unblended
+  maximum-strength strategy. See `Documentation/AI_STRATEGY.md` for the
+  benchmark definition, measured results, and how to recalibrate.
 - [ ] **Event-driven UI** *(architecture change)*: replace whole-board
   `renderAll()` repaints with engine-emitted events (cardPlayed,
   trickResolved, …) the UI subscribes to. Prerequisite for smoother

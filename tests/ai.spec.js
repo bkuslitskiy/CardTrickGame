@@ -134,7 +134,12 @@ test.describe('selectAICardToPlay — Easy AI', () => {
   });
 });
 
-test.describe('selectAICardToPlay — Medium AI', () => {
+// Difficulties are calibrated BLENDS of pure strategies (see AI_PROFILES in
+// engine.js), so per-difficulty play is no longer deterministic. The exact
+// picks below pin the PURE strategy functions in window.AI_STRATEGIES; the
+// blend layer has its own tests further down.
+
+test.describe('AI_STRATEGIES.greedy', () => {
   test('plays the card with the highest play-score from the available hand', async ({ page }) => {
     await loadApp(page);
     await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
@@ -144,12 +149,9 @@ test.describe('selectAICardToPlay — Medium AI', () => {
       const C = (s, r) => new window.Card(s, r);
       // hiddenScore: rank value; so 9 > 7 > 5
       const cards = [C('♣', 5), C('♦', 9), C('♥', 7)];
-      const ai = { ...window.gameState.players[0], difficulty: 'Medium',
-                   hiddenHand: cards, shownHand: [] };
-      const chosen = window.selectAICardToPlay(ai, cards);
-      return chosen.rank;
+      const ai = { ...window.gameState.players[0], hiddenHand: cards, shownHand: [] };
+      return window.AI_STRATEGIES.greedy(ai, cards).rank;
     });
-    // Medium always plays highest play-score → rank 9 (hiddenScore = 9)
     expect(result).toBe(9);
   });
 
@@ -161,19 +163,34 @@ test.describe('selectAICardToPlay — Medium AI', () => {
     const result = await page.evaluate(() => {
       const C = (s, r) => new window.Card(s, r);
       // Shown Queen = shownScore 14, Shown King = shownScore 5
-      const qn = C('♣', 12); // Queen shown → score 14
-      const kg = C('♦', 13); // King shown  → score 5
-      const ai = { ...window.gameState.players[0], difficulty: 'Medium',
-                   hiddenHand: [], shownHand: [qn, kg] };
-      const chosen = window.selectAICardToPlay(ai, [qn, kg]);
-      return chosen.rank;
+      const qn = C('♣', 12);
+      const kg = C('♦', 13);
+      const ai = { ...window.gameState.players[0], hiddenHand: [], shownHand: [qn, kg] };
+      return window.AI_STRATEGIES.greedy(ai, [qn, kg]).rank;
     });
     // Queen Shown (14) beats King Shown (5)
-    expect(result).toBe(12); // rank 12 = Queen
+    expect(result).toBe(12);
   });
 });
 
-test.describe('selectAICardToPlay — Hard AI, leading', () => {
+test.describe('AI_STRATEGIES.naive', () => {
+  test('always slams the highest face-value card, even a weak Shown King', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const kg = C('♣', 13); // King shown — face 13, play value only 5
+      const c9 = C('♦', 9);  // Nine hidden — play value 9 (the better play)
+      const ai = { ...window.gameState.players[0], hiddenHand: [c9], shownHand: [kg] };
+      return window.AI_STRATEGIES.naive(ai, [kg, c9]).rank;
+    });
+    expect(result).toBe(13); // biggest face wins, tactics be damned
+  });
+});
+
+test.describe('AI_STRATEGIES.hard — leading', () => {
   test('leads with the 2nd-best card by face value (not the strongest)', async ({ page }) => {
     await loadApp(page);
     await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
@@ -183,10 +200,9 @@ test.describe('selectAICardToPlay — Hard AI, leading', () => {
       const C = (s, r) => new window.Card(s, r);
       // Face values: 14 > 10 > 7 > 4; 2nd-best = rank 10
       const cards = [C('♣', 14), C('♦', 10), C('♥', 7), C('♠', 4)];
-      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
-                   hiddenHand: cards, shownHand: [] };
+      const ai = { ...window.gameState.players[0], hiddenHand: cards, shownHand: [] };
       window.gameState.playZone = []; // empty = leading
-      const chosen = window.selectAICardToPlay(ai, cards);
+      const chosen = window.AI_STRATEGIES.hard(ai, cards);
       return chosen.rank;
     });
     expect(result).toBe(10); // 2nd-best face value
@@ -200,17 +216,16 @@ test.describe('selectAICardToPlay — Hard AI, leading', () => {
     const result = await page.evaluate(() => {
       const C = (s, r) => new window.Card(s, r);
       const only = C('♣', 14);
-      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
-                   hiddenHand: [only], shownHand: [] };
+      const ai = { ...window.gameState.players[0], hiddenHand: [only], shownHand: [] };
       window.gameState.playZone = [];
-      const chosen = window.selectAICardToPlay(ai, [only]);
+      const chosen = window.AI_STRATEGIES.hard(ai, [only]);
       return chosen.rank;
     });
     expect(result).toBe(14);
   });
 });
 
-test.describe('selectAICardToPlay — Hard AI, following', () => {
+test.describe('AI_STRATEGIES.hard — following', () => {
   test('plays the minimum winning card (not the strongest) when a winning card exists', async ({ page }) => {
     await loadApp(page);
     await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
@@ -224,12 +239,11 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
       const c9  = C('♣', 9);
       const c11 = C('♦', 11);
       const c14 = C('♠', 14);
-      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
-                   hiddenHand: [c9, c11, c14], shownHand: [] };
+      const ai = { ...window.gameState.players[0], hiddenHand: [c9, c11, c14], shownHand: [] };
       window.gameState.playZone = [
         { card: leader, player: window.gameState.players[1], section: 'Hidden' },
       ];
-      const chosen = window.selectAICardToPlay(ai, [c9, c11, c14]);
+      const chosen = window.AI_STRATEGIES.hard(ai, [c9, c11, c14]);
       return chosen.rank;
     });
     expect(result).toBe(9); // minimum play-score winner
@@ -253,12 +267,11 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
       const kg = C('♣', 13); // King  — shown, shownScore = 5, faceValue = 13
       const c6 = C('♦', 6);  // Six   — hidden, hiddenScore = 6, faceValue = 6
       const c9 = C('♠', 9);  // Nine  — hidden, hiddenScore = 9, faceValue = 9
-      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
-                   hiddenHand: [c6, c9], shownHand: [kg] };
+      const ai = { ...window.gameState.players[0], hiddenHand: [c6, c9], shownHand: [kg] };
       window.gameState.playZone = [
         { card: leader, player: window.gameState.players[1], section: 'Hidden' },
       ];
-      const chosen = window.selectAICardToPlay(ai, [kg, c6, c9]);
+      const chosen = window.AI_STRATEGIES.hard(ai, [kg, c6, c9]);
       return { rank: chosen.rank, score: chosen.shownScore ?? chosen.hiddenScore };
     });
     // Shown King has play score 5 — cheapest winner, should be chosen.
@@ -278,15 +291,130 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
       const c3 = C('♣', 3);
       const c6 = C('♦', 6);
       const c9 = C('♠', 9);
-      const ai = { ...window.gameState.players[0], difficulty: 'Hard',
-                   hiddenHand: [c3, c6, c9], shownHand: [] };
+      const ai = { ...window.gameState.players[0], hiddenHand: [c3, c6, c9], shownHand: [] };
       window.gameState.playZone = [
         { card: leader, player: window.gameState.players[1], section: 'Hidden' },
       ];
-      const chosen = window.selectAICardToPlay(ai, [c3, c6, c9]);
+      const chosen = window.AI_STRATEGIES.hard(ai, [c3, c6, c9]);
       return chosen.rank;
     });
     expect(result).toBe(3); // discard lowest face-value to minimise prize given away
+  });
+});
+
+test.describe('AI_STRATEGIES.master', () => {
+  test('leading: dumps the lowest face-value card (lowFace lead style)', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const cards = [C('♣', 14), C('♦', 10), C('♥', 7), C('♠', 4)];
+      const ai = { ...window.gameState.players[0], hiddenHand: cards, shownHand: [] };
+      window.gameState.playZone = []; // leading
+      return window.AI_STRATEGIES.master(ai, cards).rank;
+    });
+    // Leading is structurally weak (the card faces all three opponents), so
+    // Master sheds its junk and fights from later seats.
+    expect(result).toBe(4);
+  });
+
+  test('last to act: picks the exact winning card via the real trick resolver', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const ps = window.gameState.players;
+      // Zone: values 9, 7, 5. Master holds a 10 (cheapest exact winner with
+      // prize 9♦) and an Ace (wins the same prize but wastes face 14).
+      window.gameState.playZone = [
+        { card: C('♦', 9), player: ps[1], section: 'Hidden' },
+        { card: C('♥', 7), player: ps[2], section: 'Hidden' },
+        { card: C('♠', 5), player: ps[3], section: 'Hidden' },
+      ];
+      const c10 = C('♣', 10);
+      const ace = C('♣', 14);
+      const ai = { ...ps[0], hiddenHand: [c10, ace], shownHand: [] };
+      return window.AI_STRATEGIES.master(ai, [c10, ace]).rank;
+    });
+    expect(result).toBe(10); // wins the trick, spends 4 fewer points of face
+  });
+
+  test('last to act: refuses to gift its high card when it cannot win', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const ps = window.gameState.players;
+      // Ace hidden (14) already in the zone — nothing Master holds can win.
+      window.gameState.playZone = [
+        { card: C('♦', 14), player: ps[1], section: 'Hidden' },
+        { card: C('♥', 3), player: ps[2], section: 'Hidden' },
+        { card: C('♠', 5), player: ps[3], section: 'Hidden' },
+      ];
+      const kg = C('♣', 13); // would become the prize — a 13-point gift
+      const c2 = C('♣', 2);  // junk
+      const ai = { ...ps[0], hiddenHand: [kg, c2], shownHand: [] };
+      return window.AI_STRATEGIES.master(ai, [kg, c2]).rank;
+    });
+    expect(result).toBe(2); // dump junk, keep the King out of the prize pool
+  });
+});
+
+test.describe('AI profile blend layer', () => {
+  test('all UI difficulties have a valid profile and strategy references', async ({ page }) => {
+    await loadApp(page);
+    const ok = await page.evaluate(() => {
+      const diffs = ['Easy', 'Medium', 'Hard', 'Master', 'Random'];
+      return diffs.every(d => {
+        const prof = window.AI_PROFILES[d];
+        return prof
+          && typeof window.AI_STRATEGIES[prof.play] === 'function'
+          && typeof window.AI_STRATEGIES[prof.playAlt] === 'function'
+          && typeof window.AI_TARGETERS[prof.target] === 'function'
+          && prof.p >= 0 && prof.p <= 1;
+      });
+    });
+    expect(ok).toBe(true);
+  });
+
+  test('p=0 always uses the base strategy; p=1 always uses the alternative', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => { void window.startGame({ humanId: -1 }); });
+    await page.waitForFunction(() => window.gameState?.isRunning);
+
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      // greedy picks the 9 (highest play score); naive picks the Shown King
+      // (highest face). Distinct picks make the blend choice observable.
+      const kg = C('♣', 13);
+      const c9 = C('♦', 9);
+      const ai = { ...window.gameState.players[0], difficulty: 'Probe',
+                   hiddenHand: [c9], shownHand: [kg] };
+      window.AI_PROFILES.Probe = { target: 'random', play: 'greedy', playAlt: 'naive', p: 0 };
+      const out = {};
+      out.atP0 = window.selectAICardToPlay(ai, [kg, c9]).rank;   // greedy → 9
+      window.AI_PROFILES.Probe.p = 1;
+      out.atP1 = window.selectAICardToPlay(ai, [kg, c9]).rank;   // naive → K
+      delete window.AI_PROFILES.Probe;
+      return out;
+    });
+    expect(result.atP0).toBe(9);
+    expect(result.atP1).toBe(13);
+  });
+
+  test('Master is a pure (unblended) strategy and Easy blends toward naive', async ({ page }) => {
+    await loadApp(page);
+    const profiles = await page.evaluate(() => window.AI_PROFILES);
+    expect(profiles.Master.p).toBe(0);
+    expect(profiles.Master.play).toBe('master');
+    expect(profiles.Easy.playAlt).toBe('naive');
+    expect(profiles.Easy.p).toBeGreaterThan(0);
   });
 });
 

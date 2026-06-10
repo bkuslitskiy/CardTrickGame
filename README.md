@@ -17,6 +17,13 @@ This repository contains **two implementations** of the same 4-player trick-taki
 npm run serve     # http://localhost:4173
 ```
 
+Four AI difficulties: **Easy / Medium / Hard / Master** — calibrated so a
+skilled player beats an Easy table ~67% of the time, splits with Medium, and
+loses to Hard ~67% of the time; Master is the strongest strategy found. See
+[AI_STRATEGY.md](Documentation/AI_STRATEGY.md) for the calibration
+methodology and `npm run simulate` for the headless AI-vs-AI benchmark
+harness.
+
 ### Run the tests
 
 ```powershell
