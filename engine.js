@@ -142,72 +142,256 @@ function determineTrick(playZone) {
     };
 }
 
-/** AI Logic Helpers **/
+/** AI Logic **/
 
-/**
- * Select which opponent to reveal a card from.
- *
- * Easy  — random opponent.
- * Medium — opponent with fewest hidden cards (maximises known information).
- * Hard  — opponent currently leading on score (disrupt the leader).
- */
-function selectAITarget(player, validTargets) {
-    if (player.difficulty === 'Easy') {
-        return validTargets[Math.floor(rng() * validTargets.length)].id;
-    }
-    if (player.difficulty === 'Medium') {
-        return [...validTargets].sort((a, b) => a.hiddenHand.length - b.hiddenHand.length)[0].id;
-    }
-    // Hard: target the player with the highest score.
-    return [...validTargets].sort((a, b) => b.score - a.score)[0].id;
+// play-score helper: cards in the player's hiddenHand use hiddenScore,
+// anything else (shown hand, hypothetical plays) uses shownScore.
+function playScoreOf(player, c) {
+    return player.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore;
 }
 
 /**
- * Select which card to play from validCards.
+ * Card counting from PUBLIC information only (no peeking at opponents'
+ * hidden hands): everything visible — my own hand, all shown hands, all
+ * scoring zones, the discard pile, and the current play zone — is "seen";
+ * the rest of the 52-card deck is the unseen pool opponents' hidden cards
+ * are drawn from.
  *
- * Easy  — random.
- * Medium — highest play-score card (greedy).
- * Hard  —
- *   Leading : 2nd-best by face value (don't telegraph the strongest card).
- *   Following: spend the minimum play-score card that still wins;
- *              if none wins, discard the lowest face-value card
- *              (preserve prize potential).
- *
- * NOTE: winning cards are sorted by play score (hiddenScore / shownScore),
- * NOT face value.  A Shown King has play score 5 but face value 13 — it is
- * the cheapest possible winner and should be preferred over a 6♣ Hidden
- * (play score 6) even though its face value is higher.
+ * Returns P(my play value `v` survives), i.e. every player still to act
+ * stays strictly below v. Opponents are modelled as playing a uniformly
+ * random card from their hand (exact against Random benchmark opponents,
+ * conservative against stronger ones).
  */
-function selectAICardToPlay(player, validCards) {
-    if (player.difficulty === 'Easy') {
+function masterHoldProbability(player, v, zone) {
+    // Count seen cards per rank.
+    const seenByRank = {};
+    const see = c => { seenByRank[c.rank] = (seenByRank[c.rank] || 0) + 1; };
+    player.hiddenHand.forEach(see);
+    gameState.players.forEach(p => {
+        p.shownHand.forEach(see);
+        p.scoringZone.forEach(see);
+    });
+    gameState.discards.forEach(see);
+    zone.forEach(e => see(e.card));
+
+    let unseenTotal = 0, unseenAbove = 0;
+    for (let r = 2; r <= 14; r++) {
+        const unseen = 4 - (seenByRank[r] || 0);
+        unseenTotal += unseen;
+        if (r > v) unseenAbove += unseen; // hidden cards play at face value
+    }
+    const pHiddenBeats = unseenTotal > 0 ? unseenAbove / unseenTotal : 0;
+
+    const playedIds = new Set(zone.map(e => e.player.id));
+    let hold = 1;
+    for (const opp of gameState.players) {
+        if (opp.id === player.id || playedIds.has(opp.id)) continue;
+        const handSize = opp.hiddenHand.length + opp.shownHand.length;
+        if (handSize === 0) continue;
+        const shownBeats = opp.shownHand.filter(c => c.shownScore > v).length;
+        const pBeats = (opp.hiddenHand.length * pHiddenBeats + shownBeats) / handSize;
+        hold *= (1 - pBeats);
+    }
+    return hold;
+}
+
+// Tunable weights for the Master expected-value strategy. Calibrated with
+// tools/simulate.js (see --set MASTER.<key>=<value> for experiments).
+const MASTER_PARAMS = {
+    winBonus:  1,          // flat value of winning a trick beyond the prize face
+    spendCost: 0.15,       // per-face cost of spending a card (last-seat eval)
+    leadStyle: 'lowFace',  // 'diff' | 'secondFace' | 'lowFace' | 'maxValue'
+    holdMin:   0,          // min hold probability to spend a mid-trick winner
+};
+
+/**
+ * Pure play strategies. Each takes (player, validCards) and returns a card.
+ * selectAICardToPlay composes these through AI_PROFILES below; tests pin the
+ * strategies directly (they are deterministic except 'random').
+ */
+const AI_STRATEGIES = {
+    /** Uniform random. */
+    random(player, validCards) {
         return validCards[Math.floor(rng() * validCards.length)];
-    }
+    },
 
-    // play-score helper: cards in hiddenHand use hiddenScore, others use shownScore.
-    const getScore = (c) => player.hiddenHand.includes(c) ? c.hiddenScore : c.shownScore;
+    /**
+     * Naive beginner: always slams the biggest card (highest face value).
+     * Wasteful — burns strength early and gifts high-face prize material.
+     * Measurably WEAKER than random; Easy blends toward this.
+     */
+    naive(player, validCards) {
+        return [...validCards].sort((a, b) => b.faceValue - a.faceValue)[0];
+    },
 
-    if (player.difficulty === 'Medium') {
-        return [...validCards].sort((a, b) => getScore(b) - getScore(a))[0];
-    }
+    /** Greedy: always the highest play-score card. */
+    greedy(player, validCards) {
+        return [...validCards].sort((a, b) =>
+            playScoreOf(player, b) - playScoreOf(player, a))[0];
+    },
 
-    // Hard — leading (play zone is empty)
-    if (gameState.playZone.length === 0) {
-        const sorted = [...validCards].sort((a, b) => b.faceValue - a.faceValue);
-        return sorted.length > 1 ? sorted[1] : sorted[0];
-    }
+    /**
+     * Hard heuristics:
+     *   Leading : 2nd-best by face value (don't telegraph the strongest card).
+     *   Following: spend the minimum play-score card that still wins;
+     *              if none wins, discard the lowest face-value card
+     *              (preserve prize potential).
+     *
+     * NOTE: winning cards are sorted by play score (hiddenScore/shownScore),
+     * NOT face value. A Shown King has play score 5 but face value 13 — it
+     * is the cheapest possible winner and should be preferred over a 6♣
+     * Hidden (play score 6) even though its face value is higher.
+     */
+    hard(player, validCards) {
+        if (gameState.playZone.length === 0) {
+            const sorted = [...validCards].sort((a, b) => b.faceValue - a.faceValue);
+            return sorted.length > 1 ? sorted[1] : sorted[0];
+        }
+        const maxInPlay = Math.max(
+            ...gameState.playZone.map(p =>
+                p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore)
+        );
+        const winningCards = validCards.filter(c => playScoreOf(player, c) > maxInPlay);
+        if (winningCards.length > 0) {
+            return winningCards.sort((a, b) =>
+                playScoreOf(player, a) - playScoreOf(player, b))[0];
+        }
+        return [...validCards].sort((a, b) => a.faceValue - b.faceValue)[0];
+    },
 
-    // Hard — following
-    const maxInPlay = Math.max(
-        ...gameState.playZone.map(p =>
-            p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore)
-    );
-    const winningCards = validCards.filter(c => getScore(c) > maxInPlay);
-    if (winningCards.length > 0) {
-        // Cheapest winner by play score — preserves high face-value cards for prizes.
-        return winningCards.sort((a, b) => getScore(a) - getScore(b))[0];
-    }
-    // Can't win — discard lowest face-value card.
-    return [...validCards].sort((a, b) => a.faceValue - b.faceValue)[0];
+    /**
+     * Master — expected-value play.
+     *
+     *   Last to act: evaluate every candidate card EXACTLY by running the
+     *     real trick resolver on the hypothetical play zone. Naturally
+     *     discovers tie plays (value-tying the current best eliminates it)
+     *     and never gifts its own high card as a prize when avoidable.
+     *
+     *   Earlier in the trick: per-candidate expected value. A card that
+     *     currently wins holds up only if every remaining player stays
+     *     below its play value — approximated as ((v-2)/13)^k for k players
+     *     still to act (exactly right against uniform-random opponents).
+     *     EV trades the likely prize against the risk of being overtaken
+     *     and gifting the card's face value, plus a small spend cost so
+     *     junk gets shed when winning isn't worth it.
+     */
+    master(player, validCards) {
+        const zone = gameState.playZone;
+        const P = MASTER_PARAMS;
+
+        if (zone.length === 3) {
+            let best = null, bestVal = -Infinity;
+            for (const c of validCards) {
+                const section = player.hiddenHand.includes(c) ? 'Hidden' : 'Shown';
+                const result = determineTrick([...zone, { card: c, player, section }]);
+                let v = 0;
+                if (result.winnerId === player.id) {
+                    // Prize face value, plus a nudge for winning at all.
+                    v += (result.prizeCard ? result.prizeCard.faceValue : 0) + P.winBonus;
+                } else if (result.prizeCard === c) {
+                    v -= c.faceValue; // my card gifted to the winner
+                }
+                v -= P.spendCost * c.faceValue; // all else equal, spend low cards
+                if (v > bestVal) { bestVal = v; best = c; }
+            }
+            return best;
+        }
+
+        if (zone.length === 0) {
+            // Leading style is a calibration knob (see MASTER_PARAMS).
+            const byFace = [...validCards].sort((a, b) => b.faceValue - a.faceValue);
+            if (P.leadStyle === 'secondFace') {
+                return byFace.length > 1 ? byFace[1] : byFace[0];
+            }
+            if (P.leadStyle === 'lowFace') {
+                return byFace[byFace.length - 1];
+            }
+            if (P.leadStyle === 'maxValue') {
+                return [...validCards].sort((a, b) =>
+                    playScoreOf(player, b) - playScoreOf(player, a))[0];
+            }
+            // 'diff' (default): max (play value − face value), tiebreak by
+            // play value — prefers Shown 2..J (+2 in play, cheap as prizes).
+            return [...validCards].sort((a, b) =>
+                (playScoreOf(player, b) - b.faceValue) - (playScoreOf(player, a) - a.faceValue) ||
+                playScoreOf(player, b) - playScoreOf(player, a))[0];
+        }
+
+        // Mid-trick following: cheapest winner that is actually LIKELY to
+        // hold up, judged by card counting (masterHoldProbability). Spending
+        // the cheapest nominal winner is wasted when a later player beats it
+        // — skip up to stronger winners until the hold probability clears
+        // P.holdMin; if no winner is credible, dump the lowest face instead.
+        // (A tie-dump variant — deliberately value-tying the current best to
+        // eliminate it — measured ~6 points WORSE: it trades own cards 1:1
+        // against opponents', a losing trade when your cards are stronger.)
+        const maxInPlay = Math.max(...zone.map(p =>
+            p.section === 'Hidden' ? p.card.hiddenScore : p.card.shownScore));
+        const winners = validCards
+            .filter(c => playScoreOf(player, c) > maxInPlay)
+            .sort((a, b) => playScoreOf(player, a) - playScoreOf(player, b));
+        for (const c of winners) {
+            if (masterHoldProbability(player, playScoreOf(player, c), zone) >= P.holdMin) return c;
+        }
+        return [...validCards].sort((a, b) => a.faceValue - b.faceValue)[0];
+    },
+};
+
+/**
+ * Pure reveal-target strategies (player, validTargets) -> target id.
+ * Note: revealing HELPS the target on average — a random hidden card gains
+ * expected play value (+2 for 2..Q, −8/−4 for K/A → mean +10/13). Master
+ * therefore boosts the weakest opponent instead of the leader.
+ */
+const AI_TARGETERS = {
+    random(player, validTargets) {
+        return validTargets[Math.floor(rng() * validTargets.length)].id;
+    },
+    fewestHidden(player, validTargets) {
+        return [...validTargets].sort((a, b) => a.hiddenHand.length - b.hiddenHand.length)[0].id;
+    },
+    leader(player, validTargets) {
+        return [...validTargets].sort((a, b) => b.score - a.score)[0].id;
+    },
+    weakest(player, validTargets) {
+        return [...validTargets].sort((a, b) => a.score - b.score)[0].id;
+    },
+};
+
+/**
+ * Difficulty profiles — the calibration layer.
+ *
+ * Each play decision uses `playAlt` with probability `p`, otherwise `play`.
+ * The blends are tuned against the difficulty benchmark (tools/simulate.js
+ * --calibrate): one Master-grade reference seat (a skilled-player proxy)
+ * plays three candidate AIs, reference seat rotated. Targets are the
+ * candidate tier's COLLECTIVE win rate against that reference:
+ *
+ *   Easy 33% · Medium 50% · Hard 67% · Master = maximum (the reference itself)
+ *
+ * i.e. a skilled player should beat an Easy table 2 games in 3, split with
+ * Medium, and lose to a Hard table 2 games in 3.
+ * 'Random' is an internal pure-random baseline (not in the UI).
+ */
+const AI_PROFILES = {
+    Random: { target: 'random',       play: 'random', playAlt: 'random', p: 0    },
+    Easy:   { target: 'random',       play: 'random', playAlt: 'naive',  p: 0.70 },
+    Medium: { target: 'fewestHidden', play: 'random', playAlt: 'master', p: 0.25 },
+    Hard:   { target: 'leader',       play: 'hard',   playAlt: 'master', p: 0.17 },
+    Master: { target: 'weakest',      play: 'master', playAlt: 'master', p: 0    },
+};
+
+/** Select which opponent to reveal a card from, per difficulty profile. */
+function selectAITarget(player, validTargets) {
+    const prof = AI_PROFILES[player.difficulty] || AI_PROFILES.Easy;
+    return AI_TARGETERS[prof.target](player, validTargets);
+}
+
+/** Select which card to play, per difficulty profile (with calibrated blend). */
+function selectAICardToPlay(player, validCards) {
+    const prof = AI_PROFILES[player.difficulty] || AI_PROFILES.Easy;
+    const strategy = (prof.p > 0 && rng() < prof.p) ? prof.playAlt : prof.play;
+    return AI_STRATEGIES[strategy](player, validCards);
 }
 
 // Bump when the save shape changes; loadSavedGame rejects other versions.
@@ -426,6 +610,13 @@ window.gameLoop           = gameLoop;
 // These are the authoritative implementations; ai.js is now a stub.
 window.selectAITarget     = selectAITarget;
 window.selectAICardToPlay = selectAICardToPlay;
+// Pure strategy/targeter registries and the calibration profiles — exposed
+// so tests can pin the deterministic strategies directly and the simulator
+// (tools/simulate.js) can report on the blend parameters.
+window.AI_STRATEGIES      = AI_STRATEGIES;
+window.AI_TARGETERS       = AI_TARGETERS;
+window.AI_PROFILES        = AI_PROFILES;
+window.MASTER_PARAMS      = MASTER_PARAMS;
 // Determinism hook for tests: setSeed(n) makes shuffle/reveal/Easy-AI
 // reproducible; setSeed(null) restores Math.random.
 window.setSeed            = setSeed;
