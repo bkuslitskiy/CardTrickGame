@@ -160,7 +160,7 @@ test.describe('Determine phase', () => {
     // Wait for the prompt overlay to show a trick result. The new Determine
     // sequence runs ~2s of animations, so allow a generous timeout.
     await expect(page.locator('#prompt-overlay')).toContainText(
-      /(wins the trick|Tie!|trick is void|no prize)/i, { timeout: 30_000 });
+      /(wins the trick|Tie!|nobody wins|no prize)/i, { timeout: 30_000 });
   });
 
   test('winner receives the prize card into their scoring zone', async ({ page }) => {
@@ -193,6 +193,82 @@ test.describe('Determine phase', () => {
       return totalScored <= rounds;
     });
     expect(ok).toBe(true);
+  });
+
+  test('a REAL user click dismisses the trick-result wait and the round advances', async ({ page }) => {
+    // Every other test auto-resolves resolveInput from script — this one
+    // exercises the actual document-level click listener users rely on.
+    await loadApp(page);
+    await page.evaluate(() => {
+      window.SPEED = 0;
+      void window.startGame({ humanId: -1 });
+    });
+
+    // Wait until round 1's Determine sequence is parked on its click-wait.
+    await page.waitForFunction(() =>
+      window.gameState?.phase === 'Determine' &&
+      typeof window.gameState.resolveInput === 'function',
+      null, { timeout: 15_000 });
+
+    const roundBefore = await page.evaluate(() => window.gameState.round);
+    await page.locator('#play-zone').click({ force: true });
+
+    await page.waitForFunction((rb) => window.gameState.round > rb, roundBefore, {
+      timeout: 10_000,
+    });
+    expect(await page.evaluate(() => window.gameState.round)).toBe(roundBefore + 1);
+  });
+
+  test('pressing Enter also dismisses the trick-result wait (keyboard access)', async ({ page }) => {
+    await loadApp(page);
+    await page.evaluate(() => {
+      window.SPEED = 0;
+      void window.startGame({ humanId: -1 });
+    });
+
+    await page.waitForFunction(() =>
+      window.gameState?.phase === 'Determine' &&
+      typeof window.gameState.resolveInput === 'function',
+      null, { timeout: 15_000 });
+
+    const roundBefore = await page.evaluate(() => window.gameState.round);
+    await page.keyboard.press('Enter');
+
+    await page.waitForFunction((rb) => window.gameState.round > rb, roundBefore, {
+      timeout: 10_000,
+    });
+  });
+});
+
+test.describe('Keyboard play (accessibility)', () => {
+  test('human cards are focusable buttons; Enter plays the focused card', async ({ page }) => {
+    await loadApp(page);
+    await startGame(page);
+
+    // Resolve the reveal phase via keyboard: opponent badges become buttons.
+    await page.waitForFunction(() =>
+      document.querySelectorAll('.selectable-player').length >= 3);
+    const badgeRole = await page.locator('#info-1').getAttribute('role');
+    expect(badgeRole).toBe('button');
+    await page.locator('#info-1').focus();
+    await page.keyboard.press('Enter');
+
+    // Now it's the human's turn to play: cards must be focusable buttons.
+    await expect(page.locator('#prompt-overlay')).toContainText(/select a card/i, {
+      timeout: 5_000,
+    });
+    const card = page.locator('#hidden-0 .card.clickable').first();
+    expect(await card.getAttribute('role')).toBe('button');
+    expect(await card.getAttribute('tabindex')).toBe('0');
+    expect(await card.getAttribute('aria-label')).toMatch(/^Play /);
+
+    const before = await page.evaluate(() => window.gameState.playZone.length);
+    await card.focus();
+    await page.keyboard.press('Enter');
+
+    await page.waitForFunction((b) =>
+      window.gameState.playZone.length > b, before, { timeout: 5_000 });
+    expect(await page.evaluate(() => window.gameState.playZone.length)).toBe(before + 1);
   });
 });
 

@@ -1,8 +1,8 @@
 # Card Game — Webapp Test Suite
 
-These tests are a behavioural **spec** for the JS rewrite of the card game. They
-are expected to fail until the rewrite is complete — read each failing test as
-a contract the rebuilt code has to honour.
+These tests are the behavioural **spec** for the JS card game. The rewrite is
+complete and the suite is expected to pass in full — a failing test means a
+contract regression. They also run in CI (`.github/workflows/tests.yml`).
 
 ## Setup
 
@@ -47,16 +47,29 @@ The tests rely on these being attached to `window`:
 - `window.Card`, `window.Deck`, `window.Player`            (data classes)
 - `window.gameState`                                       (live state object)
 - `window.startGame()`, `window.resumeGame()`, `window.showMenu()`, `window.endGame()`
-- **`window.determineTrick(playZone)`** — *NEW*. Pure function returning
-  `{ winnerId: number | null, prizeCard: Card | null }`. The current
-  algorithm is buried inside `executeDeterminePhase` as a closure; the
-  rewrite should hoist it so it's testable in isolation.
+- `window.determineTrick(playZone)` — pure trick resolver returning
+  `{ winnerId, prizeCard, valueTiedCards, scoreTiedCards }`
+- `window.selectAITarget`, `window.selectAICardToPlay`     (AI strategy)
+- `window.SAVE_VERSION` — current save-payload schema version
 
-## Known-ambiguous rules pinned by these tests
+## Test hooks
 
-- **Three-card value tie**: tests assume "all cards discarded, nobody wins"
-  (matches the current `engine.js` behaviour). `Basic rules.txt` also
-  mentions a "fourth card wins, no prize" variant — pick one and flip the
-  matching test if you choose the alternate.
-- **Round starter advancement**: tests pin the current formula
-  `nextStarter = (winnerId + 3) % 4` (counter-clockwise from the winner).
+- **`window.SPEED`** — multiplier applied to every `delay()` in engine.js.
+  Default `1` (real-time animations). Tests that drive whole rounds or full
+  games set `window.SPEED = 0` *before* calling `startGame()` so the loop
+  runs at full speed. Leave it at 1 in tests that observe animation timing
+  (e.g. the active-turn highlight sweep).
+- **`window.setSeed(n)`** — installs a deterministic PRNG (mulberry32) behind
+  the deck shuffle, the reveal pick, and Easy-AI choices, so deals are
+  reproducible. `setSeed(null)` restores `Math.random`.
+
+## Canonical rules pinned by these tests (clarified June 2026)
+
+- **Value ties**: ALL cards involved in a value tie are discarded, whatever
+  the tie size. A 3-way tie leaves one survivor who **wins the round but
+  takes no prize** (nothing remains after their own card is discarded). A
+  4-way tie, or two 2-way ties, eliminates every card — nobody wins.
+- **Round starter advancement**: the leader rotates to
+  `(winnerId + 3) % 4` (counter-clockwise from the winner) **only when a
+  prize is actually taken**. Prize-less rounds — no winner, or a winner with
+  an empty prize pool — repeat the same leader.

@@ -19,13 +19,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+// Corrupt or missing stats must never throw — a parse error here would kill
+// the DOMContentLoaded handler (drag-drop setup, resume button) with it.
+function readStats() {
+    try {
+        const stats = JSON.parse(localStorage.getItem('cardGameStats'));
+        if (stats && typeof stats.played === 'number' && typeof stats.wins === 'number'
+            && typeof stats.highestScore === 'number') return stats;
+    } catch (e) {}
+    return { played: 0, wins: 0, highestScore: 0 };
+}
+
 function updateStatsUI() {
-    let stats = JSON.parse(localStorage.getItem('cardGameStats')) || { played: 0, wins: 0, highestScore: 0 };
+    let stats = readStats();
     document.getElementById('stats-display').innerText = `Games Played: ${stats.played} | Human Wins: ${stats.wins} | High Score: ${stats.highestScore}`;
 }
 
 function recordStats(winner, humanScore) {
-    let stats = JSON.parse(localStorage.getItem('cardGameStats')) || { played: 0, wins: 0, highestScore: 0 };
+    let stats = readStats();
     stats.played++;
     if (winner.id === 0) stats.wins++;
     if (humanScore > stats.highestScore) stats.highestScore = humanScore;
@@ -42,11 +53,33 @@ function hydratePlayer(p) {
     return np;
 }
 
+// Validate the save before trusting it. A tampered or stale-schema payload
+// must fail load (return false → fresh menu), not resume into a corrupt game.
+function isValidSave(p) {
+    if (!p || p.version !== window.SAVE_VERSION) return false;
+    if (!Array.isArray(p.players) || p.players.length !== 4) return false;
+    if (!Number.isInteger(p.round) || p.round < 1 || p.round > 13) return false;
+    if (!Number.isInteger(p.starterId) || p.starterId < 0 || p.starterId > 3) return false;
+    if (!['Reveal', 'Play', 'Determine', 'Score'].includes(p.phase)) return false;
+    if (!Array.isArray(p.discards) || !Array.isArray(p.playZone)) return false;
+    const validCard = c => c && Number.isInteger(c.rank) && c.rank >= 2 && c.rank <= 14
+        && Object.values(Suits).includes(c.suit);
+    if (!p.players.every(pl => pl && Number.isInteger(pl.id)
+        && [pl.hiddenHand, pl.shownHand, pl.scoringZone].every(h => Array.isArray(h) && h.every(validCard)))) return false;
+    if (!p.discards.every(validCard)) return false;
+    // Every play-zone entry must reference a player that exists in the save.
+    if (!p.playZone.every(pz => pz && validCard(pz.card)
+        && ['Hidden', 'Shown'].includes(pz.section)
+        && p.players.some(pl => pl.id === pz.player?.id))) return false;
+    return true;
+}
+
 function loadSavedGame() {
     let saved = localStorage.getItem('cardGameState');
     if (!saved) return false;
     try {
         let p = JSON.parse(saved);
+        if (!isValidSave(p)) return false;
         gameState.players = p.players.map(hydratePlayer);
         gameState.round = p.round; gameState.phase = p.phase; gameState.starterId = p.starterId;
         gameState.discards = p.discards.map(hydrateCard);
@@ -125,11 +158,26 @@ async function resumeGame() {
 }
 
 function endGame() {
-    gameState.isRunning = false; let resultsHTML = ''; let maxScore = -1; let winner = null;
-    gameState.players.forEach(p => { if(p.score > maxScore) { maxScore = p.score; winner = p; } resultsHTML += `<div>${p.name}: ${p.score} pts</div>`; });
+    gameState.isRunning = false; let maxScore = -1; let winner = null;
+    // Ties: strict > keeps the first player at the max score, so the human
+    // (seat 0) wins any tie they are part of.
+    gameState.players.forEach(p => { if(p.score > maxScore) { maxScore = p.score; winner = p; } });
     recordStats(winner, gameState.players[0].score); clearSavedGame();
-    resultsHTML = `<div style="font-size:32px; font-weight:bold; color:var(--accent); margin-bottom:20px;">WINNER: ${winner.name}</div>` + resultsHTML;
-    document.getElementById('end-results').innerHTML = resultsHTML; document.getElementById('end-screen').style.display = 'flex';
+
+    // Player names round-trip through localStorage saves — build the results
+    // with textContent (never innerHTML) so a tampered save can't inject HTML.
+    const results = document.getElementById('end-results');
+    results.innerHTML = '';
+    const banner = document.createElement('div');
+    banner.style.cssText = 'font-size:32px; font-weight:bold; color:var(--accent); margin-bottom:20px;';
+    banner.textContent = `WINNER: ${winner.name}`;
+    results.appendChild(banner);
+    gameState.players.forEach(p => {
+        const row = document.createElement('div');
+        row.textContent = `${p.name}: ${p.score} pts`;
+        results.appendChild(row);
+    });
+    document.getElementById('end-screen').style.display = 'flex';
 }
 
 function updateStatus(text) { document.getElementById('status-text').innerText = text; }
@@ -138,11 +186,24 @@ function setPrompt(text) { const p = document.getElementById('prompt-overlay'); 
 function requestHumanRevealTarget(validTargets) {
     return new Promise(resolve => {
         setPrompt("Choose an opponent to reveal a card from."); gameState.resolveInput = resolve;
+        const cleanup = () => validTargets.forEach(t => {
+            let el = document.getElementById(`info-${t.id}`);
+            el.classList.remove('selectable-player');
+            el.onclick = null; el.onkeydown = null;
+            el.removeAttribute('role'); el.removeAttribute('tabindex');
+        });
         validTargets.forEach(target => {
             let infoDiv = document.getElementById(`info-${target.id}`); infoDiv.classList.add('selectable-player');
-            infoDiv.onclick = () => {
-                validTargets.forEach(t => { let el = document.getElementById(`info-${t.id}`); el.classList.remove('selectable-player'); el.onclick = null; });
+            const choose = () => {
+                cleanup();
                 setPrompt(null); let r = gameState.resolveInput; gameState.resolveInput = null; if(r) r(target.id);
+            };
+            infoDiv.onclick = choose;
+            // Keyboard: opponent badges become focusable buttons during selection.
+            infoDiv.setAttribute('role', 'button');
+            infoDiv.tabIndex = 0;
+            infoDiv.onkeydown = (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); }
             };
         });
     });
@@ -229,9 +290,14 @@ function decorateCard(card, type) {
     }
 }
 
+const SUIT_NAMES = { '♣': 'clubs', '♦': 'diamonds', '♥': 'hearts', '♠': 'spades' };
+function cardLabel(c, section) {
+    return `${Ranks[c.rank]} of ${SUIT_NAMES[c.suit] || c.suit}${section === 'Shown' ? ' (shown)' : ''}`;
+}
+
 function createCardElement(c, isInteractive, clickCallback, isHidden, section) {
     let el = document.createElement('div');
-    if (isHidden) { el.className = 'card back'; return el; }
+    if (isHidden) { el.className = 'card back'; el.setAttribute('aria-hidden', 'true'); return el; }
 
     let isRevealing = c.isRevealing ? 'revealing' : '';
     let isShownClass = section === 'Shown' ? 'shown' : '';
@@ -249,11 +315,20 @@ function createCardElement(c, isInteractive, clickCallback, isHidden, section) {
 
     if (isRevealing) { setTimeout(() => { el.innerHTML = contentHTML; }, 300); } else { el.innerHTML = contentHTML; }
 
+    el.setAttribute('aria-label', cardLabel(c, section));
+
     if (isInteractive) {
         el.draggable = true;
         el.ondragstart = (e) => { e.dataTransfer.setData('application/json', JSON.stringify(c)); document.getElementById('play-zone').classList.add('active-drop'); };
         el.ondragend = (e) => { document.getElementById('play-zone').classList.remove('active-drop'); document.getElementById('play-zone').classList.remove('drag-over'); };
         el.onclick = () => { if(clickCallback) clickCallback(c); };
+        // Keyboard play: cards act as buttons (Tab to focus, Enter/Space to play).
+        el.setAttribute('role', 'button');
+        el.tabIndex = 0;
+        el.setAttribute('aria-label', `Play ${cardLabel(c, section)}`);
+        el.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (clickCallback) clickCallback(c); }
+        };
     }
     return el;
 }

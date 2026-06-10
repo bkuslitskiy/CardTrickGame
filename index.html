@@ -9,7 +9,7 @@
 <body class="game-wrapper">
     <header>
         <div class="title">Trick-Taking Card Game</div>
-        <div id="status-text">Phase: Setup | Round: 1/13</div>
+        <div id="status-text" role="status" aria-live="polite">Phase: Setup | Round: 1/13</div>
         <div>
             <button onclick="showRules()" class="btn-accent" style="margin-right: 10px;">Rules</button>
             <button onclick="showMenu()" class="btn-danger">Abandon Game</button>
@@ -39,10 +39,12 @@
             Each round proceeds as follows:<br>
             - <strong>Reveal:</strong> The leader chooses another player. A random card from that player's Hidden hand is placed face up into that player's Shown hand.<br>
             - <strong>Play:</strong> Players take turns placing a card from their hand (Hidden or Shown) into the Play zone, starting with the leader.<br>
-            - <strong>Determination:</strong> Discard cards with tied Values. Rank remaining cards by Value. Highest Value card's player wins the round. Discard winner's card. Rank remaining cards by Score. Highest remaining scoring card is this round's prize.<br>
-            - <strong>Next Round:</strong> The leader for the next round is the player counter-clockwise from the previous round's winner. If there was no winner, the leader does not change.</p>
-            
+            - <strong>Determination:</strong> Discard all cards with tied Values (whatever the tie size). Rank remaining cards by Value. Highest Value card's player wins the round. Discard winner's card. Rank remaining cards by Score. Highest remaining scoring card is this round's prize.<br>
+            - <strong>Next Round:</strong> The leader for the next round is the player counter-clockwise from the previous round's winner. If no prize was taken — nobody won, or the winner had no prize to take — the leader does not change.</p>
+
             <p><strong>Edge Cases & Tie Breaking:</strong><br>
+            - If three cards tie in Value, they are discarded and the remaining player wins the round — but their own card is discarded too, so they take no prize.<br>
+            - If all four cards are discarded by ties (a four-way tie, or two two-way ties), nobody wins the round.<br>
             - If potential prize cards tie in Score, they are discarded and the next highest is taken.<br>
             - You must choose a player with cards in their Hidden hand to reveal a card. If all players are out of Hidden cards, no cards are revealed that round.</p>
             <button onclick="hideRules()" class="btn-danger" style="margin-top: 15px;">Close Rules</button>
@@ -64,7 +66,7 @@
     </div>
 
     <div id="game-board" class="game-container">
-        <div id="prompt-overlay"></div>
+        <div id="prompt-overlay" role="status" aria-live="assertive"></div>
         
         <div id="play-zone" class="play-zone">
             <div id="play-slot-2" class="play-slot"></div>

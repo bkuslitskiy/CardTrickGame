@@ -5,7 +5,14 @@ They cannot be automated from code and were left out of the scripted fix pass.
 
 ---
 
-## 1 — Delete stray script files (Bugs 9 & 10)
+## 1 — ~~Delete stray script files (Bugs 9 & 10)~~ ✅ DONE (June 10, 2026)
+
+Both stray files were deleted **together with their `.meta` files** directly
+from the repo (no orphan `.meta` left behind), so no Unity Editor action is
+needed anymore. Also removed in the same pass: `Assets/Scripts/UI/index.html`
+(+ `.meta`), the stray root-level `GameLoopManager.cs` / `SceneBootstrapper.cs`
+drafts, and the empty `webapp/` folder. Original instructions kept below for
+the record.
 
 Two `.cs` files sitting outside `Assets/Scripts/` were blanked out and replaced
 with deprecation comments. The actual files must be deleted via the Unity
@@ -46,7 +53,10 @@ that used to be on `GameBoardUI` need to be re-assigned on `GameBoardUIEnhanced`
 
 ---
 
-## 3 — Delete the stub file created in the wrong location (Bug 11)
+## 3 — ~~Delete the stub file created in the wrong location (Bug 11)~~ ✅ DONE (June 10, 2026)
+
+`Assets/Scripts/UI/index.html` and its `.meta` were deleted from the repo, and
+the `webapp/` folder was removed. Original instructions kept below.
 
 During the fix pass a placeholder was written to `Assets/Scripts/UI/index.html`.
 The real web implementation lives at the **project root** (`/index.html`).

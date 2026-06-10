@@ -1,10 +1,41 @@
-# Trick-Taking Card Game - Project Scaffold
+# Trick-Taking Card Game
+
+## Project status (June 2026) — read this first
+
+This repository contains **two implementations** of the same 4-player trick-taking game:
+
+| Implementation | Where | Status |
+|---|---|---|
+| **Browser webapp (canonical)** | `index.html`, `engine.js`, `ui.js`, `styles.css` at the repo root | **Playable and tested.** This is the active version — all current development happens here. |
+| Unity / C# scaffold | `Assets/Scripts/` | Paused. Complete logic architecture, but UI wiring requires Unity-Editor work (see `Documentation/MANUAL_TODO.md`). Kept as the long-term base for a possible Android port. |
+
+**Where the rules disagree, the webapp + `Basic rules.txt` are authoritative.** Canonical tie rules (clarified June 2026): all value-tied cards are discarded whatever the tie size; on a 3-way tie the lone survivor **wins the round but takes no prize**; a 4-way tie or two 2-way ties means nobody wins. The leader only rotates when a prize is actually taken — prize-less rounds repeat the same leader.
+
+### Run the webapp
+
+```powershell
+npm run serve     # http://localhost:4173
+```
+
+### Run the tests
+
+```powershell
+npm install
+npx playwright install chromium
+npm test          # 90+ Playwright tests, see tests/README.md
+```
+
+---
+
+# Unity Scaffold (paused)
+
+The remainder of this document describes the **Unity/C# scaffold**.
 
 ## Overview
 
 This is a complete architecture scaffold for a cross-platform trick-taking card game for 4 players. Built with **Unity + C#**, designed for both Windows desktop and future Android sideload.
 
-**Current Status**: Full logic architecture complete. All game rules implemented. Ready for UI development.
+**Current Status**: Logic architecture complete; UI wiring paused in favour of the JS webapp.
 
 ---
 
@@ -69,7 +100,7 @@ Card Game/
 
 ### Tie-Breaking
 - **2-card tie**: Discard tied Values, winner is highest remaining Value.
-- **3-card tie**: All tied cards discarded, 4th card winner (no prize)
+- **3-card tie**: The three tied cards are discarded; the remaining player wins the round, discards their own card, and takes no prize. The same leader then leads the next round (no prize was taken).
 - **4-card tie**: All discarded, no winner
 
 ---
@@ -364,6 +395,6 @@ Refer to the [Documentation](Documentation/) folder:
 
 ---
 
-**Last Updated**: May 5, 2026
-**Status**: Ready for UI development
-**Phase**: Architecture scaffold complete (100%)
+**Last Updated**: June 10, 2026
+**Status**: Unity track paused — the browser webapp at the repo root is the active, canonical implementation
+**Phase**: Architecture scaffold complete (100%); Unity UI wiring on hold
