@@ -295,7 +295,7 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
 test.describe('Round starter advancement', () => {
   // These tests run an all-AI game and observe starterId changes between rounds.
 
-  test('starterId moves to (winner + 3) % 4 after a round with a winner', async ({ page }) => {
+  test('starterId moves to (winner + 3) % 4 after a round where a prize is taken', async ({ page }) => {
     // Run a real all-AI round. While round 1's trick is paused on its
     // click-wait, the play zone is still intact — capture determineTrick's
     // verdict for it, dismiss the wait, and check the starterId the engine
@@ -321,16 +321,19 @@ test.describe('Round starter advancement', () => {
           setTimeout(() => resolve({
             before,
             winnerId: verdict.winnerId,
+            prizeTaken: verdict.prizeCard !== null,
             after: window.gameState.starterId,
           }), 300);
         }
       }, 20);
     }));
 
-    if (result.winnerId !== null) {
+    if (result.winnerId !== null && result.prizeTaken) {
       expect(result.after).toBe((result.winnerId + 3) % 4);
     } else {
-      expect(result.after).toBe(result.before); // tie → same leader again
+      // No prize taken (tie, or winner with an empty prize pool) → same
+      // leader again.
+      expect(result.after).toBe(result.before);
     }
   });
 

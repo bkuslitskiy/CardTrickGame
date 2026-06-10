@@ -9,7 +9,7 @@ This repository contains **two implementations** of the same 4-player trick-taki
 | **Browser webapp (canonical)** | `index.html`, `engine.js`, `ui.js`, `styles.css` at the repo root | **Playable and tested.** This is the active version — all current development happens here. |
 | Unity / C# scaffold | `Assets/Scripts/` | Paused. Complete logic architecture, but UI wiring requires Unity-Editor work (see `Documentation/MANUAL_TODO.md`). Kept as the long-term base for a possible Android port. |
 
-**Where the rules disagree, the webapp + `Basic rules.txt` are authoritative.** Known divergence: on a 3-card value tie the webapp voids the trick (nobody wins); older Unity docs describe a "4th card wins, no prize" variant that is NOT the implemented rule.
+**Where the rules disagree, the webapp + `Basic rules.txt` are authoritative.** Canonical tie rules (clarified June 2026): all value-tied cards are discarded whatever the tie size; on a 3-way tie the lone survivor **wins the round but takes no prize**; a 4-way tie or two 2-way ties means nobody wins. The leader only rotates when a prize is actually taken — prize-less rounds repeat the same leader.
 
 ### Run the webapp
 
@@ -100,7 +100,7 @@ Card Game/
 
 ### Tie-Breaking
 - **2-card tie**: Discard tied Values, winner is highest remaining Value.
-- **3-card tie**: All cards discarded, trick is void — nobody wins (canonical rule; an earlier draft said "4th card wins, no prize")
+- **3-card tie**: The three tied cards are discarded; the remaining player wins the round, discards their own card, and takes no prize. The same leader then leads the next round (no prize was taken).
 - **4-card tie**: All discarded, no winner
 
 ---

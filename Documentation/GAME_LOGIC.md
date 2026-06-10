@@ -66,9 +66,9 @@ Score is always the base face value, used for awarding prizes and the final win 
 3. **Award cards**:
    - If winner exists: They take the remaining card with the highest **Score** to their scoring zone. If potential prize cards tie in **Score**, they are discarded and the next highest is taken.
    - All other cards discarded
-   - If no winner (all 3+ cards tied): All cards discarded, no one scores
+   - If no winner (all four cards eliminated by ties — a 4-way tie or two 2-way ties): All cards discarded, no one scores
 
-4. **Advance round starter**: Move counterclockwise from the round's winner
+4. **Advance round starter**: Move counterclockwise from the round's winner — **only if a prize was taken**. If no prize was taken (no winner, or the winner's prize pool was emptied — e.g. the 3-way-tie survivor, or all prize candidates score-tied away), the same player leads the next round.
 
 ### End of Game
 - All 13 rounds complete, all hands empty

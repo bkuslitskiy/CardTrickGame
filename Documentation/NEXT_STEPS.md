@@ -41,10 +41,11 @@ track.*
 ## Unity track (paused)
 
 - [ ] Decide whether to keep the Unity scaffold as the Android-port base or
-  archive it. If kept: port the canonical 3-card-tie rule (void trick) into
-  `GameRules.cs`, re-enable the `DisabledTests`, and work through the
-  remaining Unity-Editor items in `MANUAL_TODO.md` (scene cleanup, Tips
-  button, Test Framework install).
+  archive it. If kept: port the canonical tie rules into `GameRules.cs`
+  (all value-tied cards discarded; 3-way-tie survivor wins with no prize;
+  leader rotates only when a prize is taken), re-enable the `DisabledTests`,
+  and work through the remaining Unity-Editor items in `MANUAL_TODO.md`
+  (scene cleanup, Tips button, Test Framework install).
 
 ## Documentation
 

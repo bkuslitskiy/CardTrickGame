@@ -186,24 +186,38 @@ test.describe('Trick resolution', () => {
     expect(result.prizeCard?.rank).toBe(3);
   });
 
-  test('three-card value tie resolution', async ({ page }) => {
-    // Basic rules.txt: "If three cards tie, all cards are discarded and
-    // nobody wins." Note: the original Basic rules also has a contradictory
-    // line about the 4th card winning with no prize. Pick ONE behaviour and
-    // assert it. This test encodes "all cards discarded, no winner". If you
-    // intend the alternate rule, flip the expectation.
+  test('three-card value tie: the lone survivor wins the round but takes no prize', async ({ page }) => {
+    // Canonical rule (clarified June 2026): the three tied cards are
+    // discarded; the remaining player wins the round, discards their own
+    // card, and takes no prize — nothing remains to take.
     const result = await page.evaluate(() => {
       const C = (s, r) => new window.Card(s, r);
       const playZone = [
         { card: C('♣', 10), player: { id: 0 }, section: 'Hidden' }, // 10
         { card: C('♦', 10), player: { id: 1 }, section: 'Hidden' }, // 10
         { card: C('♥', 10), player: { id: 2 }, section: 'Hidden' }, // 10  three-way tie
-        { card: C('♠',  4), player: { id: 3 }, section: 'Hidden' }, //  4  lone survivor
+        { card: C('♠',  4), player: { id: 3 }, section: 'Hidden' }, //  4  lone survivor — WINNER
+      ];
+      return window.determineTrick(playZone);
+    });
+    expect(result.winnerId).toBe(3);
+    expect(result.prizeCard).toBeNull();
+  });
+
+  test('two 2-way ties: all four cards eliminated, nobody wins', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 10), player: { id: 0 }, section: 'Hidden' }, // 10 ┐ tie
+        { card: C('♦', 10), player: { id: 1 }, section: 'Hidden' }, // 10 ┘
+        { card: C('♥',  6), player: { id: 2 }, section: 'Hidden' }, //  6 ┐ tie
+        { card: C('♠',  6), player: { id: 3 }, section: 'Hidden' }, //  6 ┘
       ];
       return window.determineTrick(playZone);
     });
     expect(result.winnerId).toBeNull();
     expect(result.prizeCard).toBeNull();
+    expect(result.valueTiedCards).toHaveLength(4);
   });
 
   test('four-card value tie: nobody wins, no prize', async ({ page }) => {
@@ -300,11 +314,55 @@ test.describe('Round starter rotation', () => {
   }
 
   for (let winner = 0; winner < 4; winner++) {
-    test(`winner at seat ${winner} → engine sets starterId to ${(winner + 3) % 4}`, async ({ page }) => {
+    test(`winner at seat ${winner} takes a prize → engine sets starterId to ${(winner + 3) % 4}`, async ({ page }) => {
       const starterId = await runDetermineWithWinner(page, winner);
       expect(starterId).toBe((winner + 3) % 4);
     });
   }
+
+  test('3-way-tie survivor wins WITHOUT a prize → starterId unchanged (same leader)', async ({ page }) => {
+    // Canonical rule: leadership only rotates when a prize is taken. The
+    // 3-way-tie survivor wins the round but takes nothing, so the same
+    // player leads again.
+    const result = await page.evaluate(async () => {
+      window.SPEED = 0;
+      const C = (s, r) => new window.Card(s, r);
+      const players = [
+        new window.Player(0, 'South', false, 'Easy'),
+        new window.Player(1, 'West',  false, 'Easy'),
+        new window.Player(2, 'North', false, 'Easy'),
+        new window.Player(3, 'East',  false, 'Easy'),
+      ];
+      window.gameState = {
+        players,
+        activePlayerId: null,
+        round: 1, phase: 'Determine', starterId: 1,
+        playZone: [
+          { card: C('♣', 10), player: players[0], section: 'Hidden' }, // tied
+          { card: C('♦', 10), player: players[1], section: 'Hidden' }, // tied
+          { card: C('♥', 10), player: players[2], section: 'Hidden' }, // tied
+          { card: C('♠',  4), player: players[3], section: 'Hidden' }, // survivor — wins, no prize
+        ],
+        discards: [],
+        isRunning: true, resolveInput: null,
+      };
+      window.renderPlayZone();
+      const ack = setInterval(() => {
+        const r = window.gameState.resolveInput;
+        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
+      }, 5);
+      await window.executeDeterminePhase();
+      clearInterval(ack);
+      return {
+        starterId: window.gameState.starterId,
+        survivorScored: players[3].scoringZone.length,
+        discards: window.gameState.discards.length,
+      };
+    });
+    expect(result.starterId).toBe(1);        // unchanged — no prize was taken
+    expect(result.survivorScored).toBe(0);   // winner took nothing
+    expect(result.discards).toBe(4);         // all four cards discarded
+  });
 
   test('no winner (4-way tie) → engine leaves starterId unchanged', async ({ page }) => {
     const starterId = await page.evaluate(async () => {
@@ -386,9 +444,10 @@ test.describe('determineTrick — visual-effect return fields', () => {
     expect(result.scoreTiedCount).toBe(0);
   });
 
-  test('3-card void tie: ALL four cards land in valueTiedCards', async ({ page }) => {
-    // Per Basic rules: "If three cards tie, all cards are discarded and
-    // nobody wins." The UI cuts every card in the play zone.
+  test('3-card tie: the three tied cards land in valueTiedCards, survivor wins', async ({ page }) => {
+    // Canonical rule: only the tied cards are cut; the lone survivor wins
+    // the round (their card is the winner card, not a tie casualty) and
+    // takes no prize.
     const result = await page.evaluate(() => {
       const C = (s, r) => new window.Card(s, r);
       const playZone = [
@@ -396,6 +455,24 @@ test.describe('determineTrick — visual-effect return fields', () => {
         { card: C('♦', 10), player: { id: 1 }, section: 'Hidden' },
         { card: C('♥', 10), player: { id: 2 }, section: 'Hidden' },
         { card: C('♠',  4), player: { id: 3 }, section: 'Hidden' },
+      ];
+      return window.determineTrick(playZone);
+    });
+    expect(result.winnerId).toBe(3);
+    expect(result.prizeCard).toBeNull();
+    expect(result.valueTiedCards).toHaveLength(3);
+    expect(result.valueTiedCards.map(c => c.rank)).toEqual([10, 10, 10]);
+    expect(result.scoreTiedCards).toHaveLength(0);
+  });
+
+  test('4-way tie: ALL four cards land in valueTiedCards, nobody wins', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const C = (s, r) => new window.Card(s, r);
+      const playZone = [
+        { card: C('♣', 9), player: { id: 0 }, section: 'Hidden' },
+        { card: C('♦', 9), player: { id: 1 }, section: 'Hidden' },
+        { card: C('♥', 9), player: { id: 2 }, section: 'Hidden' },
+        { card: C('♠', 9), player: { id: 3 }, section: 'Hidden' },
       ];
       return window.determineTrick(playZone);
     });

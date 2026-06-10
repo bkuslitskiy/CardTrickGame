@@ -86,8 +86,11 @@ var gameState = { players: [], round: 1, phase: '', starterId: 0, playZone: [], 
  * }}
  *
  * Rules (from Basic rules.txt):
- *   - Value ties of 2 cards: those 2 are discarded, remaining cards rescore.
- *   - Value ties of 3 or 4 cards: the trick is void — nobody wins, no prize.
+ *   - ALL cards involved in a value tie (2-, 3-, or 4-way) are discarded.
+ *     The highest-Value card among the untied survivors wins the trick.
+ *   - A 3-way tie therefore leaves one survivor who wins the round but takes
+ *     no prize (nothing remains after their own card is discarded).
+ *   - A 4-way tie, or two 2-way ties, eliminates every card — nobody wins.
  *   - Among the non-winner survivors, the highest faceValue is the prize.
  *     If 2+ prize candidates tie on faceValue they're discarded and the
  *     next-highest is taken.
@@ -108,19 +111,10 @@ function determineTrick(playZone) {
     const valueCounts = {};
     evaluated.forEach(p => { valueCounts[p.value] = (valueCounts[p.value] || 0) + 1; });
 
-    // 3- or 4-way value ties void the entire trick — visually, every card is
-    // "cut" since per Basic rules every card is discarded and nobody wins.
-    if (Object.values(valueCounts).some(n => n >= 3)) {
-        return {
-            winnerId: null,
-            prizeCard: null,
-            valueTiedCards: evaluated.map(p => p.card),
-            scoreTiedCards: [],
-        };
-    }
-
-    // Cards eliminated by a 2-way value tie.
-    const valueTiedCards = evaluated.filter(p => valueCounts[p.value] === 2).map(p => p.card);
+    // Every card that shares its Value with another is eliminated, whatever
+    // the tie size. A 3-way tie leaves one survivor (who wins, no prize); a
+    // 4-way tie or two 2-way ties eliminates all four (nobody wins).
+    const valueTiedCards = evaluated.filter(p => valueCounts[p.value] >= 2).map(p => p.card);
 
     // Surviving cards are eligible to win or compete for the prize.
     const survivors = evaluated.filter(p => valueCounts[p.value] === 1);
@@ -321,9 +315,11 @@ async function executeDeterminePhase() {
 
     // -- Step 1: cut cards eliminated by value tie --
     if (valueTiedCards.length > 0) {
-        setPrompt(valueTiedCards.length >= 3
-            ? `Three-way tie — trick is void.`
-            : `Value tie — those cards are eliminated.`);
+        setPrompt(valueTiedCards.length === 4
+            ? `All four cards tied away — nobody wins.`
+            : valueTiedCards.length === 3
+                ? `Three-way tie — those cards are eliminated.`
+                : `Value tie — those cards are eliminated.`);
         valueTiedCards.forEach(c => decorateCard(c, 'cut'));
         await delay(650);
     }
@@ -349,8 +345,7 @@ async function executeDeterminePhase() {
         await delay(500);
     } else if (winner) {
         setPrompt(`${winner.name} wins — no prize available.`);
-    } else if (valueTiedCards.length < 3) {
-        // Edge: two pair, no winner.
+    } else {
         setPrompt(`Tie! No one wins the trick.`);
     }
 
@@ -380,21 +375,20 @@ async function executeDeterminePhase() {
     if (!gameState.isRunning) return;
 
     // -- After the click: prize flies to winner, then score increments --
+    // Leadership only rotates when a prize is actually taken. If no prize
+    // was taken — no winner at all, OR a winner whose prize pool was emptied
+    // by ties (3-way tie survivor, score-tied prize candidates) — the same
+    // player leads the next round.
     if (winner && prizeCard) {
-        // Pre-rotate to the player who will lead next round (one seat
+        // Rotate to the player who will lead next round (one seat
         // counter-clockwise from the winner). executeScorePhase will NOT
-        // rotate again — this is the authoritative assignment for winner rounds.
+        // rotate again — this is the authoritative assignment.
         gameState.starterId = (winner.id + 3) % 4;
         const prizeEntry = gameState.playZone.find(p => p.card === prizeCard);
         const cardEl = document.querySelector(`#play-slot-${prizeEntry.player.id} .card`);
         if (cardEl) await animatePrizeToWinner(winner.id, cardEl);
         winner.scoringZone.push(prizeCard);
-    } else if (winner) {
-        // Winner but no prize: same rotation rule.
-        gameState.starterId = (winner.id + 3) % 4;
     }
-    // No else: no winner (all-tie) — starterId is intentionally left unchanged
-    // so the same player leads the next round (house rule: tie = replay).
 
     setPrompt(null);
     gameState.playZone.forEach(p => { if (p.card !== prizeCard) gameState.discards.push(p.card); });
@@ -406,8 +400,9 @@ async function executeDeterminePhase() {
 function executeScorePhase() {
     gameState.round++;
     // starterId was already set correctly in executeDeterminePhase:
-    //   • Winner present → (winner.id + 3) % 4  (one seat CCW from winner)
-    //   • No winner (all tied) → unchanged (same player leads again)
+    //   • Prize taken → (winner.id + 3) % 4  (one seat CCW from winner)
+    //   • No prize taken (no winner, or winner with empty prize pool) →
+    //     unchanged: the same player leads again
     gameState.phase = 'Reveal';
 }
 

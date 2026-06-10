@@ -40,9 +40,11 @@ Each round proceeds as follows:
 			Takes the remaining card with the highest face value and puts it into their scoring zone. If two or more remaining cards tie for the highest face value, they are discarded and the next highest is taken.
 			Discards the remaining two cards.
 		If two cards tie, those cards are discarded before choosing a winner. This applies to any two cards that tie in score, even if they aren't the highest.
-		If three cards tie, all cards are discarded and nobody wins.
+		If three cards tie, those three are discarded and the remaining player wins the round: they discard their own card and take no prize (nothing remains to take).
+		If all four cards are discarded by ties (a four-way tie, or two two-way ties), nobody wins the round.
 
 Each round is lead by the player to the right of the previous round's winner. If you're doing it correctly, the previous winner should be second to go in this round.
+	If no prize was taken in a round (nobody won, or the winner had no prize to take), the same player leads the next round again.
 
 Each player tallies up the cards they won, highest score wins.
 

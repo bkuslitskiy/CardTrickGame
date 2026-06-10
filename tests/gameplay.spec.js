@@ -160,7 +160,7 @@ test.describe('Determine phase', () => {
     // Wait for the prompt overlay to show a trick result. The new Determine
     // sequence runs ~2s of animations, so allow a generous timeout.
     await expect(page.locator('#prompt-overlay')).toContainText(
-      /(wins the trick|Tie!|trick is void|no prize)/i, { timeout: 30_000 });
+      /(wins the trick|Tie!|nobody wins|no prize)/i, { timeout: 30_000 });
   });
 
   test('winner receives the prize card into their scoring zone', async ({ page }) => {

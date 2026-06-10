@@ -63,11 +63,13 @@ The tests rely on these being attached to `window`:
   the deck shuffle, the reveal pick, and Easy-AI choices, so deals are
   reproducible. `setSeed(null)` restores `Math.random`.
 
-## Known-ambiguous rules pinned by these tests
+## Canonical rules pinned by these tests (clarified June 2026)
 
-- **Three-card value tie**: tests assume "all cards discarded, nobody wins"
-  (matches the current `engine.js` behaviour). `Basic rules.txt` also
-  mentions a "fourth card wins, no prize" variant — pick one and flip the
-  matching test if you choose the alternate.
-- **Round starter advancement**: tests pin the current formula
-  `nextStarter = (winnerId + 3) % 4` (counter-clockwise from the winner).
+- **Value ties**: ALL cards involved in a value tie are discarded, whatever
+  the tie size. A 3-way tie leaves one survivor who **wins the round but
+  takes no prize** (nothing remains after their own card is discarded). A
+  4-way tie, or two 2-way ties, eliminates every card — nobody wins.
+- **Round starter advancement**: the leader rotates to
+  `(winnerId + 3) % 4` (counter-clockwise from the winner) **only when a
+  prize is actually taken**. Prize-less rounds — no winner, or a winner with
+  an empty prize pool — repeat the same leader.
