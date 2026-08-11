@@ -65,20 +65,25 @@
         </div>
     </div>
 
+    <!-- Board layout is a 3x3 CSS grid (see styles.css §7). The centre cell
+         owns the prompt and the play zone so the prompt can never collide with
+         a player's hand, whatever the viewport. -->
     <div id="game-board" class="game-container">
-        <div id="prompt-overlay" role="status" aria-live="assertive"></div>
-        
-        <div id="play-zone" class="play-zone">
-            <div id="play-slot-2" class="play-slot"></div>
-            <div id="play-slot-1" class="play-slot"></div>
-            <div id="play-slot-3" class="play-slot"></div>
-            <div id="play-slot-0" class="play-slot"></div>
+        <div id="center-area" class="center-area">
+            <div id="prompt-overlay" role="status" aria-live="assertive"></div>
+
+            <div id="play-zone" class="play-zone">
+                <div id="play-slot-2" class="play-slot"></div>
+                <div id="play-slot-1" class="play-slot"></div>
+                <div id="play-slot-3" class="play-slot"></div>
+                <div id="play-slot-0" class="play-slot"></div>
+            </div>
         </div>
 
-        <div id="area-2" class="player-area north"><div class="player-info" id="info-2">North (AI)</div><div class="hand-container" id="hidden-2"></div><div class="hand-container" id="shown-2"></div></div>
-        <div id="area-1" class="player-area west"><div class="player-info" id="info-1">West (AI)</div><div class="hand-container" id="hidden-1"></div><div class="hand-container" id="shown-1"></div></div>
-        <div id="area-3" class="player-area east"><div class="player-info" id="info-3">East (AI)</div><div class="hand-container" id="hidden-3"></div><div class="hand-container" id="shown-3"></div></div>
-        <div id="area-0" class="player-area south"><div class="player-info" id="info-0">South (You)</div><div class="hand-container" id="shown-0"></div><div class="hand-container" id="hidden-0"></div></div>
+        <div id="area-2" class="player-area north"><div class="player-info" id="info-2">North (AI)</div><div class="hand-container hand-hidden" id="hidden-2"></div><div class="hand-container hand-shown" id="shown-2"></div></div>
+        <div id="area-1" class="player-area west"><div class="player-info" id="info-1">West (AI)</div><div class="hand-container hand-hidden" id="hidden-1"></div><div class="hand-container hand-shown" id="shown-1"></div></div>
+        <div id="area-3" class="player-area east"><div class="player-info" id="info-3">East (AI)</div><div class="hand-container hand-hidden" id="hidden-3"></div><div class="hand-container hand-shown" id="shown-3"></div></div>
+        <div id="area-0" class="player-area south"><div class="player-info" id="info-0">South (You)</div><div class="hand-container hand-shown" id="shown-0"></div><div class="hand-container hand-hidden" id="hidden-0"></div></div>
     </div>
 
     <div id="end-screen" style="display: none;" class="overlay">

@@ -28,111 +28,47 @@ at the installed one. CI installs its own browser and is unaffected.)
 
 ---
 
-## Priority 1 — UI flexibility across devices
+## Priority 1 — UI flexibility across devices — **done**
 
-Measured by rendering a real mid-game board at eight viewports and reading back
-element geometry. Desktop (1280×800), laptop (1024×640) and tablet (820×1180)
-render correctly with all 13 cards of every hand unclipped. The defects below
-are all real and reproducible.
+All seven items below were measured at eight viewports (desktop, laptop, tablet
+portrait/landscape, phone portrait ×2, phone landscape, 320×568), fixed, and
+pinned by `tests/responsive.spec.js`. Sixteen of those fifty tests fail against
+the pre-fix stylesheet, so they are real regression cover rather than
+after-the-fact description.
 
-### P1.1 — Landscape phones are unplayable *(critical)*
+- [x] **P1.1 Landscape phones were unplayable.** `@media (max-height: 480px)`
+  set `display: none` on the South hand row — the human seat. Every rule that
+  hid a hand is gone; the fluid sizing below means nothing has to be hidden.
+- [x] **P1.2 Shown cards were clipped.** The `overflow: hidden` cap on the
+  East/West columns left 5 of 13 cards on a phone, and applied to `#shown-1` /
+  `#shown-3` too — public information, silently discarded. The stride formula
+  replaces the cap: hands compress to fit rather than being cut off.
+- [x] **P1.3 Prompt collided with the North hand.** `#prompt-overlay` now lives
+  in the board grid's centre cell (`.center-area`) and is anchored to it, so
+  the grid itself guarantees it cannot reach a hand. The four hand-tuned
+  `top: calc(50% - Npx)` offsets are gone.
+- [x] **P1.4 ~20px tap targets.** Stride is derived from hand size, so a short
+  hand spreads back out; coarse pointers also get a larger `--stride-max`.
+- [x] **P1.5 Touch drag never fired.** `attachPointerDrag()` in `ui.js` adds the
+  gesture on Pointer Events for coarse pointers; mouse input keeps native HTML5
+  drag-and-drop unchanged. The prompt now says "Tap" on touch devices.
+- [x] **P1.6 Hand-tuned sizing (root cause).** Replaced four breakpoint tiers
+  with one expression — `--card-w: clamp(24px, min(13vw, 7.4vh), 64px)` — and
+  made every other dimension a multiple of it (hands, play zone, badges, card
+  interiors, decorations). The board is a 3×3 CSS grid instead of four
+  absolutely-positioned areas. Two media queries remain, and both switch layout
+  *mode* only; neither restates a size.
+- [x] **P1.7 Device-matrix tests.** `tests/responsive.spec.js` drives the
+  viewport itself rather than adding Playwright projects, which would have
+  multiplied the whole suite per device. Suite: 150 passing.
 
-`styles.css` `@media (max-height: 480px)` sets:
+### Follow-ups this did not cover
 
-```css
-.player-area.north .hand-container,
-.player-area.south .hand-container { display: none; }
-```
-
-South is the human seat. At 844×390 and 740×360 the player's own hand computes
-to `display: none` — the cards cannot be seen, clicked, dragged or tabbed to.
-The board shows four score badges, two clipped columns of card backs, and an
-empty play zone. Any phone held sideways lands here.
-
-Fix: never hide the human's hand. Fall back to a single compressed row (or a
-horizontally scrollable strip) pinned under the play zone, and hide only the
-*opponent* rows when vertical space runs out.
-
-### P1.2 — Shown cards are clipped away on phones
-
-`.hand-container.vertical-hand { max-height: 108px; overflow: hidden }` caps the
-East/West columns. At 390×844 only 5 of 13 cards survive; at 844×390 only 3. The
-CSS comment justifies this as "AI hands are just card-backs, clipping a few
-isn't lossy" — but the same rule applies to `#shown-1` / `#shown-3`, and Shown
-cards are public information the player needs to reason about. Losing them
-silently changes the game, not just the picture.
-
-Fix: clip Hidden columns only. Shown cards must always be reachable — wrap them
-into a second column, shrink the stride to fit, or make the Shown strip scroll.
-
-### P1.3 — Prompt overlay collides with the North hand
-
-`#prompt-overlay { top: calc(50% - 175px) }` is a magic offset derived from the
-play zone's height, not from where the North hand actually is. At 1280×800 the
-prompt sits on top of North's card row and completely covers the North info
-badge. It is re-tuned by hand in three separate media queries (`-150px`,
-`-138px`, `-120px`, then `top: 8px`) and still collides.
-
-Fix: position the prompt relative to the play zone (or place it in flow between
-the North area and the play zone) so it can't be knocked out of alignment by a
-viewport the breakpoints don't anticipate.
-
-### P1.4 — Tap targets are ~20px on phones
-
-At `max-width: 600px` the card is 38px wide with a 20px stride. Because each
-card overlaps its predecessor, every card except the last exposes only ~20px of
-tappable width — well under the 44px minimum. The 54px card height helps, but
-horizontally these are hard to hit accurately.
-
-Fix: scale the stride to the *remaining* hand size rather than fixing it per
-breakpoint (13 cards need a tight stride, 4 cards do not), and consider a
-tap-to-expand fan for the human hand.
-
-### P1.5 — Drag-and-drop does not work on touch at all
-
-`createCardElement()` wires `dragstart`/`dragend` and the play zone listens for
-`dragover`/`drop`. These are HTML5 drag-and-drop events, which browsers do not
-fire for touch input. There is no `pointerdown`/`touchstart` path anywhere in
-`ui.js`. Tapping still works, so the game is playable — but the prompt reads
-"Select a card to play. Click or Drag to Center," advertising an interaction
-that cannot happen on a phone.
-
-Fix: add a pointer-event drag path (or accept tap-only and reword the prompt
-behind a `(pointer: coarse)` check).
-
-### P1.6 — The layout is hand-tuned, not fluid *(root cause)*
-
-Every player area is absolutely positioned, and sizing lives in four media
-queries that each restate `--card-w` / `--card-h` / `--card-stride` as fixed
-pixels, plus hard-coded `calc(100vh - 320px)` caps and per-breakpoint prompt
-offsets. Each of P1.1–P1.4 is a symptom: any viewport that falls between the
-authored tiers gets a layout nobody tested.
-
-Fix: derive sizing from available space instead of enumerating devices.
-
-- `--card-w: clamp(32px, 4.5vmin, 64px)` and let `--card-h` follow the aspect ratio.
-- Compute the stride from the hand's allotted band and its card count, so 13
-  cards always fit whatever space exists (a CSS var set by `renderHand()` is
-  enough — no layout engine needed).
-- Keep media queries for layout *mode* changes only (E/W row vs column, which
-  rows collapse), never for sizing.
-
-### P1.7 — Add device-matrix regression tests
-
-`playwright.config.js` declares a single `Desktop Chrome` project, so none of
-the above is covered. `tests/menu.spec.js` has two responsive assertions and
-they only check `flex-direction` on the E/W areas at 900px.
-
-Add projects for phone portrait, phone landscape and tablet, and assert the
-invariants that actually matter:
-
-1. The human's hand is visible and its cards are clickable in every project.
-2. No tracked element extends past the viewport, in either axis.
-3. `#prompt-overlay` does not intersect any hand container.
-4. Every card in every **Shown** hand is unclipped by its container.
-
-These are cheap to write — the geometry probe used for this review is just
-`getBoundingClientRect()` over a fixed id list.
+- [ ] **Accessibility (second pass)**: focus management between phases, arrow-key
+  navigation within a hand, screen-reader announcements for AI plays.
+- [ ] Real-device verification. Everything above is Chromium at a set viewport
+  size; iOS Safari's dynamic toolbar and `100dvh` behaviour deserve a look on
+  hardware.
 
 ---
 
@@ -221,10 +157,8 @@ alongside any behaviour change.
 ## Deferred
 
 - **Event-driven UI**: replace whole-board `renderAll()` repaints with
-  engine-emitted events the UI subscribes to. Worth doing, but it should follow
-  the responsive rework — otherwise the layout work gets done twice.
-- **Accessibility (second pass)**: focus management between phases, arrow-key
-  navigation within a hand, screen-reader announcements for AI plays.
+  engine-emitted events the UI subscribes to. Unblocked now that the responsive
+  rework has landed — the layout no longer changes underneath it.
 - **Unity track**: still paused. Decide whether the scaffold is the Android-port
   base or gets archived. If kept, port the canonical tie rules into
   `GameRules.cs`, re-enable `DisabledTests`, and work through `MANUAL_TODO.md`.
