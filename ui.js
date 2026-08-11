@@ -119,7 +119,7 @@ async function startGame(opts = {}) {
     clearSavedGame();
     document.getElementById('menu-screen').style.display = 'none';
     document.getElementById('end-screen').style.display = 'none';
-    document.getElementById('game-board').style.display = 'block';
+    document.getElementById('game-board').style.display = 'grid';
 
     const humanId = (opts.humanId === undefined) ? 0 : opts.humanId;
     const dropdownDiffs = [
@@ -151,7 +151,7 @@ async function startGame(opts = {}) {
 
 async function resumeGame() {
     if (loadSavedGame()) {
-        document.getElementById('menu-screen').style.display = 'none'; document.getElementById('end-screen').style.display = 'none'; document.getElementById('game-board').style.display = 'block';
+        document.getElementById('menu-screen').style.display = 'none'; document.getElementById('end-screen').style.display = 'none'; document.getElementById('game-board').style.display = 'grid';
         renderAll();
         await gameLoop();
     }
@@ -181,7 +181,17 @@ function endGame() {
 }
 
 function updateStatus(text) { document.getElementById('status-text').innerText = text; }
-function setPrompt(text) { const p = document.getElementById('prompt-overlay'); if(text) { p.innerText = text; p.style.display = 'block'; } else p.style.display = 'none'; }
+// 'flex' rather than 'block': #prompt-overlay centres its text in a
+// fixed-height pill (styles.css §12). .center-area permanently reserves that
+// height, so toggling the prompt never moves the play zone.
+function setPrompt(text) { const p = document.getElementById('prompt-overlay'); if(text) { p.innerText = text; p.style.display = 'flex'; } else p.style.display = 'none'; }
+
+// True on touch/pen devices. HTML5 drag-and-drop never fires there, so the
+// card-play prompt must not advertise dragging, and cards get the pointer
+// drag path in createCardElement() instead.
+function isCoarsePointer() {
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
 
 function requestHumanRevealTarget(validTargets) {
     return new Promise(resolve => {
@@ -211,7 +221,10 @@ function requestHumanRevealTarget(validTargets) {
 
 function requestHumanCardPlay(player) {
     return new Promise(resolve => {
-        setPrompt("Select a card to play. Click or Drag to Center."); gameState.resolveInput = resolve;
+        setPrompt(isCoarsePointer()
+            ? "Select a card to play. Tap or Drag to Center."
+            : "Select a card to play. Click or Drag to Center.");
+        gameState.resolveInput = resolve;
         renderHand(player, true, (card) => { renderHand(player, false, null); setPrompt(null); let r = gameState.resolveInput; gameState.resolveInput = null; if(r) r(card); });
     });
 }
@@ -290,6 +303,66 @@ function decorateCard(card, type) {
     }
 }
 
+/**
+ * Touch/pen drag for a playable card.
+ *
+ * The desktop path uses HTML5 drag-and-drop (dragstart/drop), which browsers
+ * never fire for touch input — so on a phone the card could only be tapped,
+ * while the prompt advertised dragging. This adds the equivalent gesture on
+ * top of Pointer Events, for coarse pointers only; mouse input keeps using
+ * native DnD so nothing about the desktop behaviour changes.
+ *
+ * A drag that ends anywhere over the play zone plays the card. A press that
+ * never moves past DRAG_SLOP is left alone, so the existing click handler
+ * still gets it (via the synthesised click) and taps keep working.
+ */
+const DRAG_SLOP = 8; // px of movement before a press counts as a drag
+function attachPointerDrag(el, card, clickCallback) {
+    el.style.touchAction = 'none';  // stop the browser scrolling instead of dragging
+    el.onpointerdown = (e) => {
+        if (e.pointerType === 'mouse') return;   // native DnD handles mouse
+        const startX = e.clientX, startY = e.clientY;
+        let dragging = false;
+        const zone = document.getElementById('play-zone');
+
+        const move = (ev) => {
+            if (!dragging) {
+                if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_SLOP) return;
+                dragging = true;
+                // Capture keeps the gesture attached to the card once it
+                // leaves the card's own box. It throws NotFoundError if the
+                // pointer id is not active, which must not abort the drag —
+                // the move/up listeners are on the element either way.
+                try { el.setPointerCapture(ev.pointerId); } catch (_) {}
+                zone.classList.add('active-drop');
+            }
+            el.style.transform = `translate(${ev.clientX - startX}px, ${ev.clientY - startY}px) scale(1.06)`;
+            el.style.zIndex = '900';
+            zone.classList.toggle('drag-over', overZone(ev, zone));
+        };
+
+        const up = (ev) => {
+            el.removeEventListener('pointermove', move);
+            el.removeEventListener('pointerup', up);
+            el.removeEventListener('pointercancel', up);
+            zone.classList.remove('active-drop', 'drag-over');
+            if (!dragging) return;               // a tap — let onclick handle it
+            el.style.transform = ''; el.style.zIndex = '';
+            if (overZone(ev, zone) && clickCallback) clickCallback(card);
+        };
+
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+    };
+}
+
+function overZone(ev, zone) {
+    const b = zone.getBoundingClientRect();
+    return ev.clientX >= b.left && ev.clientX <= b.right
+        && ev.clientY >= b.top  && ev.clientY <= b.bottom;
+}
+
 const SUIT_NAMES = { '♣': 'clubs', '♦': 'diamonds', '♥': 'hearts', '♠': 'spades' };
 function cardLabel(c, section) {
     return `${Ranks[c.rank]} of ${SUIT_NAMES[c.suit] || c.suit}${section === 'Shown' ? ' (shown)' : ''}`;
@@ -322,6 +395,7 @@ function createCardElement(c, isInteractive, clickCallback, isHidden, section) {
         el.ondragstart = (e) => { e.dataTransfer.setData('application/json', JSON.stringify(c)); document.getElementById('play-zone').classList.add('active-drop'); };
         el.ondragend = (e) => { document.getElementById('play-zone').classList.remove('active-drop'); document.getElementById('play-zone').classList.remove('drag-over'); };
         el.onclick = () => { if(clickCallback) clickCallback(c); };
+        attachPointerDrag(el, c, clickCallback);
         // Keyboard play: cards act as buttons (Tab to focus, Enter/Space to play).
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
@@ -337,8 +411,15 @@ function renderHand(player, isInteractive, clickCallback) {
     let hiddenDiv = document.getElementById(`hidden-${player.id}`); let shownDiv = document.getElementById(`shown-${player.id}`);
     hiddenDiv.innerHTML = ''; shownDiv.innerHTML = '';
 
-    if (player.id === 1 || player.id === 3) { hiddenDiv.classList.add('vertical-hand'); shownDiv.classList.add('vertical-hand'); } 
+    if (player.id === 1 || player.id === 3) { hiddenDiv.classList.add('vertical-hand'); shownDiv.classList.add('vertical-hand'); }
     else { hiddenDiv.classList.remove('vertical-hand'); shownDiv.classList.remove('vertical-hand'); }
+
+    // --hand-n is the only thing JS tells CSS about layout: how many cards are
+    // in this hand. styles.css §9 derives the overlap stride from it, so a
+    // full 13-card hand compresses to fit the available band and a short hand
+    // spreads back out — at every viewport, and on resize with no JS involved.
+    hiddenDiv.style.setProperty('--hand-n', player.hiddenHand.length);
+    shownDiv.style.setProperty('--hand-n', player.shownHand.length);
 
     player.hiddenHand.sort((a,b) => b.faceValue - a.faceValue);
     player.hiddenHand.forEach(c => {
