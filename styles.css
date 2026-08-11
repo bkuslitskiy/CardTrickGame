@@ -426,6 +426,12 @@ header button {
 .hand-container.vertical-hand {
     flex-direction: column;
     min-height: 0;
+    /* Keep the width reserved even while empty (overriding the :empty rule
+       above). The east and west grid tracks are content-sized, so without
+       this the play zone slides sideways the moment one side reveals its
+       first card and the other has not. The space gets used from round 2
+       onward regardless — reserving it just keeps the board still. */
+    min-width: var(--card-w);
     --stride: max(3px, min(
         calc(var(--card-h) * var(--stride-max-v)),
         calc((var(--vcol-h) - var(--card-h)) / max(var(--hand-n) - 1, 1))

@@ -145,6 +145,31 @@ for (const v of VIEWPORTS) {
       expect(hit).toEqual([]);
     });
 
+    test('the play zone stays centred as cards are revealed', async ({ page }) => {
+      // The east/west grid tracks are content-sized, so an asymmetric reveal
+      // (East has a shown card, West does not) used to slide the whole play
+      // zone sideways mid-game.
+      const centreOffset = async () => page.evaluate(() => {
+        const z = document.getElementById('play-zone').getBoundingClientRect();
+        return Math.abs((z.left + z.right) / 2 - window.innerWidth / 2);
+      });
+
+      const before = await centreOffset();
+      await page.evaluate(() => {
+        // Reveal two cards for East and none for West — the worst asymmetry.
+        const gs = window.gameState;
+        gs.players[3].shownHand = gs.players[3].hiddenHand.splice(0, 2);
+        window.renderAll();
+      });
+      const after = await centreOffset();
+
+      // The invariant that matters is that the zone does not MOVE. A constant
+      // ~2.5px bias remains from "West" and "East" rendering to slightly
+      // different badge widths, which is imperceptible and not drift.
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+      expect(after).toBeLessThanOrEqual(6);
+    });
+
     test('cards keep a usable hit target even with a full hand', async ({ page }) => {
       // Overlapping cards expose only `stride` px each. With 13 cards this is
       // the tightest the layout ever gets; it must stay wide enough to hit.
