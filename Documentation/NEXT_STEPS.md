@@ -32,9 +32,10 @@ at the installed one. CI installs its own browser and is unaffected.)
 
 All seven items below were measured at eight viewports (desktop, laptop, tablet
 portrait/landscape, phone portrait ×2, phone landscape, 320×568), fixed, and
-pinned by `tests/responsive.spec.js`. Sixteen of those fifty tests fail against
-the pre-fix stylesheet, so they are real regression cover rather than
-after-the-fact description.
+pinned by `tests/responsive.spec.js` and `tests/touch.spec.js`. Every group of
+new tests was checked against a deliberately reverted version of the code it
+covers, so they are real regression cover rather than after-the-fact
+description — see the table under P1.7.
 
 - [x] **P1.1 Landscape phones were unplayable.** `@media (max-height: 480px)`
   set `display: none` on the South hand row — the human seat. Every rule that
@@ -60,7 +61,25 @@ after-the-fact description.
   *mode* only; neither restates a size.
 - [x] **P1.7 Device-matrix tests.** `tests/responsive.spec.js` drives the
   viewport itself rather than adding Playwright projects, which would have
-  multiplied the whole suite per device. Suite: 150 passing.
+  multiplied the whole suite per device. Suite: **172 passing**.
+
+  Each new group was validated by reverting the code it covers and confirming
+  the tests go red:
+
+  | Revert | Tests that fail |
+  | --- | --- |
+  | Pre-fix stylesheet (breakpoint tiers) | 16 |
+  | `--stride-max` collapsed to 1px | 8 |
+  | Play zone drift fix removed | 4 |
+  | Decorations back to fixed `px` | 1 |
+  | `attachPointerDrag()` unwired | 2 |
+  | `prefers-reduced-motion` block deleted | 1 |
+
+  Coverage added beyond the layout invariants: touch drag-to-play, drop
+  outside the zone, tap-still-works, tapping the exposed strip of an
+  overlapped card, mid-drag zone highlighting, mouse input staying on the
+  native drag-and-drop path, decoration scaling across viewports, and the
+  reduced-motion rule.
 
 ### Follow-ups this did not cover
 

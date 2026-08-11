@@ -182,6 +182,136 @@ for (const v of VIEWPORTS) {
   });
 }
 
+test.describe('Determine-phase decorations scale with the card', () => {
+  // gameplay.spec.js covers that decorateCard attaches the SVGs. This covers
+  // their GEOMETRY: they are sized in em against the card's own width, so a
+  // change to the card-size expression (or a slip back to fixed pixels) must
+  // not leave them tiny on a phone or overflowing on a desktop.
+
+  /** Rig a resolved trick: K♦ wins, 9♠ is the prize, two 7s tie away. */
+  async function rigDecoratedTrick(page) {
+    await page.evaluate(() => {
+      window.SPEED = 0;
+      void window.startGame({ humanId: -1 });
+      const gs = window.gameState;
+      const C = (s, r) => new window.Card(s, r);
+      const cards = [C('♦', 13), C('♠', 9), C('♥', 7), C('♣', 7)];
+      gs.playZone = cards.map((card, i) => ({ card, player: gs.players[i], section: 'Hidden' }));
+      gs.isRunning = false;
+      window.renderAll();
+      window.decorateCard(cards[2], 'cut');
+      window.decorateCard(cards[3], 'cut');
+      window.decorateCard(cards[0], 'crown');
+      window.decorateCard(cards[1], 'coins');
+    });
+    // The entrance keyframes animate scale(), and getBoundingClientRect()
+    // reports the TRANSFORMED box — measuring early reads ~30% of the real
+    // size. Wait for them to settle.
+    await page.waitForTimeout(800);
+  }
+
+  const readRatios = (page) => page.evaluate(() => {
+    const box = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { w: b.width, h: b.height, top: b.top, left: b.left, right: b.right, bottom: b.bottom };
+    };
+    const crownCard = box('#play-slot-0 .card');
+    const coinsCard = box('#play-slot-1 .card');
+    const crown = box('#play-slot-0 .card-crown');
+    const coins = box('#play-slot-1 .card-coins');
+    const inside = (d, c) => d && c
+      && d.top >= c.top - 0.5 && d.bottom <= c.bottom + 0.5
+      && d.left >= c.left - 0.5 && d.right <= c.right + 0.5;
+    return {
+      cardW: crownCard.w,
+      crownRatio: crown && +(crown.w / crownCard.w).toFixed(3),
+      coinsRatio: coins && +(coins.w / coinsCard.w).toFixed(3),
+      crownInside: inside(crown, crownCard),
+      coinsInside: inside(coins, coinsCard),
+      cutCount: document.querySelectorAll('.play-slot .card.cut').length,
+    };
+  });
+
+  for (const v of [VIEWPORTS[0], VIEWPORTS[4], VIEWPORTS[6], VIEWPORTS[7]]) {
+    test(`crown, coins and cut all render @ ${v.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: v.w, height: v.h });
+      await loadApp(page);
+      await rigDecoratedTrick(page);
+
+      const r = await readRatios(page);
+      expect(r.crownRatio, 'crown rendered').not.toBeNull();
+      expect(r.coinsRatio, 'coins rendered').not.toBeNull();
+      expect(r.cutCount).toBe(2);
+      // .card has overflow:hidden — a decoration that escapes its frame gets
+      // silently sliced (this is what once cut the crown's top half off).
+      expect(r.crownInside, 'crown inside the card frame').toBe(true);
+      expect(r.coinsInside, 'coins inside the card frame').toBe(true);
+    });
+  }
+
+  test('decoration size stays proportional to the card across viewports', async ({ page }) => {
+    const seen = [];
+    for (const v of [VIEWPORTS[0], VIEWPORTS[4], VIEWPORTS[6]]) {
+      await page.setViewportSize({ width: v.w, height: v.h });
+      await loadApp(page);
+      await rigDecoratedTrick(page);
+      seen.push(await readRatios(page));
+    }
+
+    // Card widths genuinely differ across these viewports...
+    const widths = seen.map(s => s.cardW);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeGreaterThan(10);
+
+    // ...but the decorations occupy the same fraction of the card at each.
+    // Fixed-pixel decorations would fail here: 20px is 0.34 of a 59px card
+    // and 0.69 of a 29px one.
+    for (const key of ['crownRatio', 'coinsRatio']) {
+      const ratios = seen.map(s => s[key]);
+      expect(Math.max(...ratios) - Math.min(...ratios),
+        `${key} varies across viewports`).toBeLessThan(0.02);
+    }
+  });
+});
+
+test.describe('Reduced motion', () => {
+  test('entrance and flip animations are suppressed', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadApp(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await page.evaluate(() =>
+      matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+
+    await page.evaluate(() => {
+      window.SPEED = 0;
+      void window.startGame({ humanId: -1 });
+      const gs = window.gameState;
+      const k = new window.Card('♦', 13);
+      const q = new window.Card('♠', 9);
+      gs.playZone = [
+        { card: k, player: gs.players[0], section: 'Hidden' },
+        { card: q, player: gs.players[1], section: 'Hidden' },
+      ];
+      gs.isRunning = false;
+      window.renderAll();
+      window.decorateCard(k, 'crown');
+      window.decorateCard(q, 'coins');
+    });
+
+    const anims = await page.evaluate(() => {
+      const name = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? getComputedStyle(el).animationName : 'missing';
+      };
+      return { crown: name('.card-crown'), coins: name('.card-coins') };
+    });
+    // The decorations still render — they just arrive without the bounce.
+    expect(anims.crown).toBe('none');
+    expect(anims.coins).toBe('none');
+  });
+});
+
 test.describe('Fluid sizing', () => {
   test('card size tracks the viewport instead of snapping at breakpoints', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });

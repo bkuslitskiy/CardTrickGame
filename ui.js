@@ -329,7 +329,11 @@ function attachPointerDrag(el, card, clickCallback) {
             if (!dragging) {
                 if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_SLOP) return;
                 dragging = true;
-                el.setPointerCapture?.(ev.pointerId);
+                // Capture keeps the gesture attached to the card once it
+                // leaves the card's own box. It throws NotFoundError if the
+                // pointer id is not active, which must not abort the drag —
+                // the move/up listeners are on the element either way.
+                try { el.setPointerCapture(ev.pointerId); } catch (_) {}
                 zone.classList.add('active-drop');
             }
             el.style.transform = `translate(${ev.clientX - startX}px, ${ev.clientY - startY}px) scale(1.06)`;
