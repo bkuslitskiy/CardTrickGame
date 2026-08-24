@@ -21,10 +21,10 @@ This document outlines the exact sequence of events, user expectations, and unde
 - **Action:** Clicking the card prefab fires `InputManagerEnhanced.OnCardClicked(card)`. If valid, the state clears, UI interactability is canceled, and the card is passed to `GameManager`. `GameBoardUIEnhanced.DisplayCardPlayed()` moves a visual copy of the card to the Play Zone, and the hand refreshes to remove the played card.
 
 ## 4. Determination & Scoring Phase
-- **What happens:** Once 4 cards are in the Play Zone, the game calculates the winner based on the scoring rules and ties.
+- **What happens:** Once 4 cards are in the Play Zone, the game calculates the winner based on the scoring rules and ties. Ties resolve twice: **Value** ties eliminate cards before the winner is determined, then **Score** ties eliminate prize candidates after the winner is determined but before the prize is awarded.
 - **Expected Input:** None.
 - **Action:** `GameState.AdvancePhase()` evaluates the trick. `GameManagerController` emits `OnTrickWon`. `GameBoardUIEnhanced.DisplayTrickWinner()` triggers a visual highlight on the winner's panel, spawns floating score text, updates the overall score texts, and then clears the Play Zone after a short delay.
 
 ## 5. Next Round / Game Over
-- **What happens:** The starter token moves clockwise, and the next Reveal Phase begins. This repeats until all 13 rounds are completed and hands are empty.
+- **What happens:** The starter token moves one seat clockwise from the previous leader — every round, regardless of who won the trick or whether a prize was taken — and the next Reveal Phase begins. This repeats until all 13 rounds are completed and hands are empty.
 - **Action:** `GameManagerController` emits `OnGameComplete` and displays the final results menu.

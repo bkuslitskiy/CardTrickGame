@@ -42,8 +42,9 @@ track.*
 
 - [ ] Decide whether to keep the Unity scaffold as the Android-port base or
   archive it. If kept: port the canonical tie rules into `GameRules.cs`
-  (all value-tied cards discarded; 3-way-tie survivor wins with no prize;
-  leader rotates only when a prize is taken), re-enable the `DisabledTests`,
+  (all value-tied cards discarded before the winner is determined; 3-way-tie
+  survivor wins with no prize; score-tied prize candidates discarded after the
+  winner is determined), re-enable the `DisabledTests`,
   and work through the remaining Unity-Editor items in `MANUAL_TODO.md`
   (scene cleanup, Tips button, Test Framework install).
 

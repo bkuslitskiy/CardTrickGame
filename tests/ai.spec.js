@@ -294,12 +294,15 @@ test.describe('selectAICardToPlay — Hard AI, following', () => {
 
 test.describe('Round starter advancement', () => {
   // These tests run an all-AI game and observe starterId changes between rounds.
+  // Canonical rule: the leader moves one seat clockwise from the PREVIOUS
+  // LEADER every round, regardless of who won or whether a prize was taken.
 
-  test('starterId moves to (winner + 3) % 4 after a round where a prize is taken', async ({ page }) => {
+  test('starterId moves to (previous leader + 1) % 4 whatever the trick verdict', async ({ page }) => {
     // Run a real all-AI round. While round 1's trick is paused on its
     // click-wait, the play zone is still intact — capture determineTrick's
     // verdict for it, dismiss the wait, and check the starterId the engine
-    // actually wrote against that verdict.
+    // actually wrote. The verdict is captured only to prove the rotation is
+    // independent of it.
     await loadApp(page);
     await page.evaluate(() => {
       window.SPEED = 0;
@@ -328,18 +331,14 @@ test.describe('Round starter advancement', () => {
       }, 20);
     }));
 
-    if (result.winnerId !== null && result.prizeTaken) {
-      expect(result.after).toBe((result.winnerId + 3) % 4);
-    } else {
-      // No prize taken (tie, or winner with an empty prize pool) → same
-      // leader again.
-      expect(result.after).toBe(result.before);
-    }
+    // Unconditional: the winner and the prize have no say in this.
+    expect(result.after).toBe((result.before + 1) % 4);
   });
 
-  test('starterId is unchanged after a round with no winner (all tied)', async ({ page }) => {
-    // Drive the REAL executeDeterminePhase against a hand-built 4-way tie
-    // (no gameLoop running) and assert the engine leaves starterId alone.
+  test('starterId still advances after a round with no winner (all tied)', async ({ page }) => {
+    // Drive the REAL Determine + Score phases against a hand-built 4-way tie
+    // (no gameLoop running). Determine must leave starterId alone; Score must
+    // rotate it clockwise even though nobody won.
     await loadApp(page);
 
     const result = await page.evaluate(async () => {
@@ -356,10 +355,10 @@ test.describe('Round starter advancement', () => {
         activePlayerId: null,
         round: 1, phase: 'Determine', starterId: 2,
         playZone: [
-          { card: C('♣', 7), player: players[0], section: 'Hidden' },
-          { card: C('♦', 7), player: players[1], section: 'Hidden' },
-          { card: C('♥', 7), player: players[2], section: 'Hidden' },
-          { card: C('♠', 7), player: players[3], section: 'Hidden' },
+          { card: C('\u2663', 7), player: players[0], section: 'Hidden' },
+          { card: C('\u2666', 7), player: players[1], section: 'Hidden' },
+          { card: C('\u2665', 7), player: players[2], section: 'Hidden' },
+          { card: C('\u2660', 7), player: players[3], section: 'Hidden' },
         ],
         discards: [],
         isRunning: true, resolveInput: null,
@@ -371,9 +370,12 @@ test.describe('Round starter advancement', () => {
       }, 5);
       await window.executeDeterminePhase();
       clearInterval(ack);
-      return window.gameState.starterId;
+      const afterDetermine = window.gameState.starterId;
+      window.executeScorePhase();
+      return { afterDetermine, afterScore: window.gameState.starterId };
     });
-    expect(result).toBe(2); // unchanged — same player leads again
+    expect(result.afterDetermine).toBe(2); // Determine never rotates
+    expect(result.afterScore).toBe(3);     // Score rotates clockwise anyway
   });
 });
 

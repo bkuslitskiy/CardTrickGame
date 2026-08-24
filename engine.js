@@ -375,15 +375,10 @@ async function executeDeterminePhase() {
     if (!gameState.isRunning) return;
 
     // -- After the click: prize flies to winner, then score increments --
-    // Leadership only rotates when a prize is actually taken. If no prize
-    // was taken — no winner at all, OR a winner whose prize pool was emptied
-    // by ties (3-way tie survivor, score-tied prize candidates) — the same
-    // player leads the next round.
+    // Leadership is NOT touched here — it rotates one seat clockwise from the
+    // previous leader in executeScorePhase, regardless of who won or whether
+    // a prize was taken.
     if (winner && prizeCard) {
-        // Rotate to the player who will lead next round (one seat
-        // counter-clockwise from the winner). executeScorePhase will NOT
-        // rotate again — this is the authoritative assignment.
-        gameState.starterId = (winner.id + 3) % 4;
         const prizeEntry = gameState.playZone.find(p => p.card === prizeCard);
         const cardEl = document.querySelector(`#play-slot-${prizeEntry.player.id} .card`);
         if (cardEl) await animatePrizeToWinner(winner.id, cardEl);
@@ -399,10 +394,12 @@ async function executeDeterminePhase() {
 
 function executeScorePhase() {
     gameState.round++;
-    // starterId was already set correctly in executeDeterminePhase:
-    //   • Prize taken → (winner.id + 3) % 4  (one seat CCW from winner)
-    //   • No prize taken (no winner, or winner with empty prize pool) →
-    //     unchanged: the same player leads again
+    // Leadership rotates one seat clockwise from the PREVIOUS LEADER every
+    // round, regardless of the trick's outcome — who won, and whether a prize
+    // was taken, are irrelevant. Seats are ordered clockwise by id
+    // (0 South → 1 West → 2 North → 3 East → 0), the same order the play
+    // phase follows, so every player leads exactly once every four rounds.
+    gameState.starterId = (gameState.starterId + 1) % 4;
     gameState.phase = 'Reveal';
 }
 

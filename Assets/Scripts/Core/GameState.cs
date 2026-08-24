@@ -259,9 +259,8 @@ public class GameState
     /// <summary>
     /// Advance to next round.
     /// RoundStarter is intentionally NOT modified here — GameManager owns that
-    /// assignment based on trick outcome:
-    ///   • Someone won → starter = player to the right of winner
-    ///   • Nobody won  → starter stays the same (same player leads again)
+    /// assignment: the leader moves one seat clockwise from the previous leader
+    /// every round, regardless of the trick's outcome.
     /// </summary>
     private void AdvanceRound()
     {

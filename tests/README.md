@@ -63,13 +63,23 @@ The tests rely on these being attached to `window`:
   the deck shuffle, the reveal pick, and Easy-AI choices, so deals are
   reproducible. `setSeed(null)` restores `Math.random`.
 
-## Canonical rules pinned by these tests (clarified June 2026)
+## Canonical rules pinned by these tests
 
-- **Value ties**: ALL cards involved in a value tie are discarded, whatever
-  the tie size. A 3-way tie leaves one survivor who **wins the round but
-  takes no prize** (nothing remains after their own card is discarded). A
-  4-way tie, or two 2-way ties, eliminates every card — nobody wins.
+Ties are resolved **twice** per round, at two different points and on two
+different numbers:
+
+- **Value ties** — checked *before* the winner is determined. ALL cards
+  involved in a value tie are discarded, whatever the tie size. A 3-way tie
+  leaves one survivor who **wins the round but takes no prize** (nothing
+  remains after their own card is discarded). A 4-way tie, or two 2-way ties,
+  eliminates every card — nobody wins.
+- **Score ties** — checked *after* the winner is determined and *before* the
+  prize is awarded, among the non-winning survivors (the prize candidates) and
+  on Score (face value), not Value. Candidates that tie each other on Score are
+  discarded and the next highest is taken; if all of them are tied away, the
+  winner takes no prize.
 - **Round starter advancement**: the leader rotates to
-  `(winnerId + 3) % 4` (counter-clockwise from the winner) **only when a
-  prize is actually taken**. Prize-less rounds — no winner, or a winner with
-  an empty prize pool — repeat the same leader.
+  `(starterId + 1) % 4` — one seat clockwise from the **previous leader** —
+  **every round, regardless of the outcome**. Who won the trick and whether a
+  prize was taken have no effect on who leads next. `executeDeterminePhase`
+  never touches `starterId`; `executeScorePhase` owns the rotation.
