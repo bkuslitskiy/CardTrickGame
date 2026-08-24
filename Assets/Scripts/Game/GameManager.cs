@@ -13,7 +13,6 @@ public class GameManager
     private GameState _gameState;
     private Deck _deck;
     private Dictionary<int, Difficulty> _playerDifficulties;
-    private Player _lastTrickWinner = null;
     // When true, a phase was paused because a human player is awaiting input and
     // the phase should not advance until the human responds.
     private bool pausedForHumanInput = false;
@@ -134,10 +133,15 @@ public class GameManager
 
         _gameState.AdvancePhase();
 
-        if (previousPhase == GamePhase.Score && _lastTrickWinner != null)
+        if (previousPhase == GamePhase.Score)
         {
-            int nextStarterId = _lastTrickWinner.ID == 1 ? 4 : _lastTrickWinner.ID - 1;
-            _gameState.SetRoundStarter(nextStarterId);
+            // Leadership rotates one seat clockwise from the PREVIOUS LEADER every
+            // round, regardless of the trick's outcome — who won, and whether a
+            // prize was taken, are irrelevant. GetNextPlayer() walks clockwise, the
+            // same order GetPlayOrder() follows, so each player leads once every
+            // four rounds.
+            Player nextStarter = _gameState.GetNextPlayer(_gameState.GetRoundStarterPlayer());
+            _gameState.SetRoundStarter(nextStarter.ID);
         }
 
         OnPhaseChanged?.Invoke(_gameState);
@@ -270,11 +274,6 @@ public class GameManager
         if (winner != null && prizeCard != null)
         {
             winner.AddToScoringZone(prizeCard);
-            _lastTrickWinner = winner;
-        }
-        else
-        {
-            _lastTrickWinner = null;
         }
 
         OnTrickWon?.Invoke(winner, prizeCard);

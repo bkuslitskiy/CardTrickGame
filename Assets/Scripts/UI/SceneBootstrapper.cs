@@ -771,11 +771,12 @@ public static class SceneBootstrapper
         rulesTxt.text = "<b>OVERVIEW:</b> 4 players, 13 rounds. Win tricks to collect the highest Score cards.\n\n" +
                         "<b>1. REVEAL:</b> Leader chooses a player to reveal one random Hidden card to their Shown hand.\n" +
                         "<b>2. PLAY:</b> Each player plays one card (Hidden or Shown) in turn order.\n" +
-                        "<b>3. DETERMINATION:</b>\n" +
-                        "  - Discard any cards with tied <b>Values</b>.\n" +
-                        "  - Highest remaining <b>Value</b> wins. Winner's card is discarded.\n" +
-                        "  - Remaining card with highest <b>Score</b> is the prize. Prize <b>Score</b> ties are discarded.\n" +
-                        "<b>4. NEXT ROUND:</b> New leader is counter-clockwise from the previous winner.\n\n" +
+                        "<b>3. DETERMINATION:</b> ties resolve twice - on Value, then on Score.\n" +
+                        "  - <b>Value ties</b> (before the winner): discard every card sharing its Value with another, whatever the tie size.\n" +
+                        "  - <b>Winner:</b> highest remaining <b>Value</b> wins. Winner's card is discarded.\n" +
+                        "  - <b>Score ties</b> (after the winner, before the prize): prize candidates sharing a <b>Score</b> are discarded; the next highest is taken.\n" +
+                        "  - <b>Prize:</b> remaining candidate with the highest <b>Score</b> goes to the winner's scoring zone.\n" +
+                        "<b>4. NEXT ROUND:</b> New leader is one seat clockwise from the previous leader, every round, whatever the outcome.\n\n" +
                         "<b>VALUE (Trick Power) vs. SCORE (Prize Points):</b>\n" +
                         "  - <b>VALUE:</b> (From Hidden) Face Value | (From Shown) 2-10: +2, J:13, Q:14, K:5, A:10\n" +
                         "  - <b>SCORE:</b> Always base Face Value (J:11, Q:12, K:13, A:14)";

@@ -35,16 +35,27 @@ Each round proceeds as follows:
 		Player 3 places a card from their hand (Hidden or Shown) into the Play zone.
 		Player 4 places a card from their hand (Hidden or Shown) into the Play zone.
 	Determination:
-		Whoever has the highest scoring card in the Play zone wins the round and does the following:
-			Discards the card they played.
-			Takes the remaining card with the highest face value and puts it into their scoring zone. If two or more remaining cards tie for the highest face value, they are discarded and the next highest is taken.
-			Discards the remaining two cards.
-		If two cards tie, those cards are discarded before choosing a winner. This applies to any two cards that tie in score, even if they aren't the highest.
-		If three cards tie, those three are discarded and the remaining player wins the round: they discard their own card and take no prize (nothing remains to take).
-		If all four cards are discarded by ties (a four-way tie, or two two-way ties), nobody wins the round.
+		Determination resolves in four steps, in this order. Ties are settled twice: once on Value, before the winner is known, and once on Score, after the winner is known but before the prize is awarded.
 
-Each round is lead by the player to the right of the previous round's winner. If you're doing it correctly, the previous winner should be second to go in this round.
-	If no prize was taken in a round (nobody won, or the winner had no prize to take), the same player leads the next round again.
+		1. Value ties (before the winner is determined):
+			Compare the Value of all four cards in the Play zone.
+			Every card that shares its Value with another card is discarded, whatever the size of the tie. This applies to any tie in Value, even one that isn't for the highest Value.
+			Two cards tied -> both discarded, two cards remain.
+			Three cards tied -> all three discarded, one card remains.
+			Four cards tied, or two separate two-way ties -> every card is discarded and nothing remains.
+		2. Winner:
+			Whoever played the highest-Value card still remaining wins the round.
+			If nothing remains (a four-way tie, or two two-way ties), nobody wins the round and all four cards are discarded.
+		3. Score ties (after the winner is determined, before the prize is awarded):
+			The winner discards the card they played. The cards still remaining are the prize candidates.
+			Compare the Score of the prize candidates. Every candidate that shares its Score with another candidate is discarded, and the next highest is taken.
+			If the three tied cards were removed in step 1, the winner has no candidates left: they win the round and take no prize.
+		4. Prize:
+			The winner takes the remaining candidate with the highest Score into their scoring zone.
+			Any card left over is discarded.
+
+Each round is led by the player one seat clockwise from the previous round's leader. If you're doing it correctly, the previous round's leader should be last to go in this round, and whoever went second last round leads this one.
+	This happens every round no matter what the outcome was: who won the round, and whether a prize was taken, have no effect on who leads next. Over four rounds every player leads exactly once.
 
 Each player tallies up the cards they won, highest score wins.
 

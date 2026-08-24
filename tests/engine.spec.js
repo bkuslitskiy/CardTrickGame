@@ -270,34 +270,37 @@ test.describe('Trick resolution', () => {
 });
 
 test.describe('Round starter rotation', () => {
-  // These drive the real executeDeterminePhase against a hand-built gameState
-  // (no gameLoop running, so there is nothing to race against) and assert on
-  // the starterId the engine actually writes.
+  // Canonical rule: the leader moves ONE SEAT CLOCKWISE from the previous
+  // leader every round — who won the trick, and whether a prize was taken,
+  // are irrelevant. executeDeterminePhase must not touch starterId at all;
+  // executeScorePhase owns the rotation.
+  //
+  // These drive the real engine phases against a hand-built gameState (no
+  // gameLoop running, so there is nothing to race against) and assert on the
+  // starterId the engine actually writes.
   test.beforeEach(async ({ page }) => { await loadApp(page); });
 
-  // Builds a gameState where `winnerSeat` plays the lone Ace, runs the
-  // Determine phase to completion (auto-acking the click-wait), and returns
-  // the resulting starterId. SPEED=0 collapses the animation delays.
-  async function runDetermineWithWinner(page, winnerSeat) {
-    return page.evaluate(async (seat) => {
+  // Installs a gameState with the given starterId and play zone, runs the
+  // Determine phase to completion (auto-acking the click-wait), then runs the
+  // Score phase. Returns starterId after each phase. SPEED=0 collapses the
+  // animation delays.
+  async function runRound(page, { starterId, cards }) {
+    return page.evaluate(async ({ starterId, cards }) => {
       window.SPEED = 0;
-      const C = (s, r) => new window.Card(s, r);
       const players = [
         new window.Player(0, 'South', false, 'Easy'),
         new window.Player(1, 'West',  false, 'Easy'),
         new window.Player(2, 'North', false, 'Easy'),
         new window.Player(3, 'East',  false, 'Easy'),
       ];
-      const suits = ['♣', '♦', '♥', '♠'];
-      const loserRanks = [5, 7, 9];
-      let k = 0;
       window.gameState = {
         players,
         activePlayerId: null,
-        round: 1, phase: 'Determine', starterId: 0,
-        playZone: players.map(p => ({
-          card: C(suits[p.id], p.id === seat ? 14 : loserRanks[k++]),
-          player: p, section: 'Hidden',
+        round: 1, phase: 'Determine', starterId,
+        playZone: cards.map((c, i) => ({
+          card: new window.Card(c.suit, c.rank),
+          player: players[i],
+          section: c.section || 'Hidden',
         })),
         discards: [],
         isRunning: true, resolveInput: null,
@@ -309,91 +312,105 @@ test.describe('Round starter rotation', () => {
       }, 5);
       await window.executeDeterminePhase();
       clearInterval(ack);
-      return window.gameState.starterId;
-    }, winnerSeat);
-  }
-
-  for (let winner = 0; winner < 4; winner++) {
-    test(`winner at seat ${winner} takes a prize → engine sets starterId to ${(winner + 3) % 4}`, async ({ page }) => {
-      const starterId = await runDetermineWithWinner(page, winner);
-      expect(starterId).toBe((winner + 3) % 4);
-    });
-  }
-
-  test('3-way-tie survivor wins WITHOUT a prize → starterId unchanged (same leader)', async ({ page }) => {
-    // Canonical rule: leadership only rotates when a prize is taken. The
-    // 3-way-tie survivor wins the round but takes nothing, so the same
-    // player leads again.
-    const result = await page.evaluate(async () => {
-      window.SPEED = 0;
-      const C = (s, r) => new window.Card(s, r);
-      const players = [
-        new window.Player(0, 'South', false, 'Easy'),
-        new window.Player(1, 'West',  false, 'Easy'),
-        new window.Player(2, 'North', false, 'Easy'),
-        new window.Player(3, 'East',  false, 'Easy'),
-      ];
-      window.gameState = {
-        players,
-        activePlayerId: null,
-        round: 1, phase: 'Determine', starterId: 1,
-        playZone: [
-          { card: C('♣', 10), player: players[0], section: 'Hidden' }, // tied
-          { card: C('♦', 10), player: players[1], section: 'Hidden' }, // tied
-          { card: C('♥', 10), player: players[2], section: 'Hidden' }, // tied
-          { card: C('♠',  4), player: players[3], section: 'Hidden' }, // survivor — wins, no prize
-        ],
-        discards: [],
-        isRunning: true, resolveInput: null,
-      };
-      window.renderPlayZone();
-      const ack = setInterval(() => {
-        const r = window.gameState.resolveInput;
-        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
-      }, 5);
-      await window.executeDeterminePhase();
-      clearInterval(ack);
+      const afterDetermine = window.gameState.starterId;
+      window.executeScorePhase();
       return {
-        starterId: window.gameState.starterId,
-        survivorScored: players[3].scoringZone.length,
+        afterDetermine,
+        afterScore: window.gameState.starterId,
+        round: window.gameState.round,
+        scored: players.map(p => p.scoringZone.length),
         discards: window.gameState.discards.length,
       };
+    }, { starterId, cards });
+  }
+
+  // One clear winner (the lone Ace) and a prize to take — the leader still
+  // rotates off the previous LEADER, not off the winner.
+  const suits = ['\u2663', '\u2666', '\u2665', '\u2660'];
+  const loserRanks = [5, 7, 9];
+
+  function oneWinnerAt(seat) {
+    let k = 0;
+    return [0, 1, 2, 3].map(id => ({
+      suit: suits[id],
+      rank: id === seat ? 14 : loserRanks[k++],
+    }));
+  }
+
+  for (let starter = 0; starter < 4; starter++) {
+    for (let winner = 0; winner < 4; winner++) {
+      test(`leader ${starter}, winner ${winner} takes a prize \u2192 next leader is ${(starter + 1) % 4}`, async ({ page }) => {
+        const r = await runRound(page, { starterId: starter, cards: oneWinnerAt(winner) });
+        expect(r.afterDetermine).toBe(starter);        // Determine must not rotate
+        expect(r.afterScore).toBe((starter + 1) % 4);  // Score rotates clockwise
+        expect(r.scored[winner]).toBe(1);              // winner did take a prize
+      });
+    }
+  }
+
+  test('3-way-tie survivor wins WITHOUT a prize \u2192 leader still rotates clockwise', async ({ page }) => {
+    // The survivor wins the round but takes nothing. Under the old rule the
+    // same player led again; now the rotation is unconditional.
+    const r = await runRound(page, {
+      starterId: 1,
+      cards: [
+        { suit: '\u2663', rank: 10 }, // tied
+        { suit: '\u2666', rank: 10 }, // tied
+        { suit: '\u2665', rank: 10 }, // tied
+        { suit: '\u2660', rank:  4 }, // survivor — wins, no prize
+      ],
     });
-    expect(result.starterId).toBe(1);        // unchanged — no prize was taken
-    expect(result.survivorScored).toBe(0);   // winner took nothing
-    expect(result.discards).toBe(4);         // all four cards discarded
+    expect(r.afterDetermine).toBe(1);   // Determine must not rotate
+    expect(r.afterScore).toBe(2);       // rotates anyway, despite no prize
+    expect(r.scored[3]).toBe(0);        // winner took nothing
+    expect(r.discards).toBe(4);         // all four cards discarded
   });
 
-  test('no winner (4-way tie) → engine leaves starterId unchanged', async ({ page }) => {
-    const starterId = await page.evaluate(async () => {
-      window.SPEED = 0;
-      const C = (s, r) => new window.Card(s, r);
-      const players = [
-        new window.Player(0, 'South', false, 'Easy'),
-        new window.Player(1, 'West',  false, 'Easy'),
-        new window.Player(2, 'North', false, 'Easy'),
-        new window.Player(3, 'East',  false, 'Easy'),
-      ];
-      window.gameState = {
-        players,
-        activePlayerId: null,
-        round: 1, phase: 'Determine', starterId: 2,
-        playZone: players.map((p, i) => ({
-          card: C(['♣', '♦', '♥', '♠'][i], 7), player: p, section: 'Hidden',
-        })),
-        discards: [],
-        isRunning: true, resolveInput: null,
-      };
-      window.renderPlayZone();
-      const ack = setInterval(() => {
-        const r = window.gameState.resolveInput;
-        if (typeof r === 'function') { window.gameState.resolveInput = null; r(); }
-      }, 5);
-      await window.executeDeterminePhase();
-      clearInterval(ack);
-      return window.gameState.starterId;
+  test('no winner (4-way tie) \u2192 leader still rotates clockwise', async ({ page }) => {
+    const r = await runRound(page, {
+      starterId: 2,
+      cards: [0, 1, 2, 3].map(i => ({ suit: suits[i], rank: 7 })),
     });
-    expect(starterId).toBe(2);
+    expect(r.afterDetermine).toBe(2);   // Determine must not rotate
+    expect(r.afterScore).toBe(3);       // rotates anyway, despite no winner
+    expect(r.scored).toEqual([0, 0, 0, 0]);
+  });
+
+  test('winner with every prize candidate score-tied away \u2192 leader still rotates clockwise', async ({ page }) => {
+    // A\u2665 Hidden (Value 14) wins. The candidates K\u2660 Hidden (Value 13, Score 13)
+    // and K\u2666 Shown (Value 5, Score 13) did NOT tie in Value, so both survive
+    // the value step — but they tie on Score, so both are discarded and the
+    // winner takes no prize. The leader rotates all the same.
+    const r = await runRound(page, {
+      starterId: 3,
+      cards: [
+        { suit: '\u2665', rank: 14, section: 'Hidden' }, // Value 14 \u2192 winner
+        { suit: '\u2660', rank: 13, section: 'Hidden' }, // Value 13, Score 13
+        { suit: '\u2666', rank: 13, section: 'Shown'  }, // Value  5, Score 13
+        { suit: '\u2663', rank:  3, section: 'Hidden' }, // Value  3, Score  3
+      ],
+    });
+    expect(r.afterDetermine).toBe(3);
+    expect(r.afterScore).toBe(0);       // wraps 3 \u2192 0
+    expect(r.scored[0]).toBe(1);        // winner (seat 0) took the surviving 3\u2663
+  });
+
+  test('leadership cycles through all four seats over four rounds', async ({ page }) => {
+    const seats = await page.evaluate(() => {
+      window.gameState = {
+        players: [], round: 1, phase: 'Score', starterId: 0,
+        playZone: [], discards: [], isRunning: true, resolveInput: null,
+      };
+      const seen = [window.gameState.starterId];
+      for (let i = 0; i < 4; i++) {
+        window.gameState.phase = 'Score';
+        window.executeScorePhase();
+        seen.push(window.gameState.starterId);
+      }
+      return { seen, round: window.gameState.round };
+    });
+    expect(seats.seen).toEqual([0, 1, 2, 3, 0]);
+    expect(seats.round).toBe(5);
   });
 });
 

@@ -9,7 +9,7 @@ This repository contains **two implementations** of the same 4-player trick-taki
 | **Browser webapp (canonical)** | `index.html`, `engine.js`, `ui.js`, `styles.css` at the repo root | **Playable and tested.** This is the active version — all current development happens here. |
 | Unity / C# scaffold | `Assets/Scripts/` | Paused. Complete logic architecture, but UI wiring requires Unity-Editor work (see `Documentation/MANUAL_TODO.md`). Kept as the long-term base for a possible Android port. |
 
-**Where the rules disagree, the webapp + `Basic rules.txt` are authoritative.** Canonical tie rules (clarified June 2026): all value-tied cards are discarded whatever the tie size; on a 3-way tie the lone survivor **wins the round but takes no prize**; a 4-way tie or two 2-way ties means nobody wins. The leader only rotates when a prize is actually taken — prize-less rounds repeat the same leader.
+**Where the rules disagree, the webapp + `Basic rules.txt` are authoritative.** Canonical tie rules: ties are resolved **twice** per round — on **Value** before the winner is determined, then on **Score** among the prize candidates after the winner is determined but before the prize is awarded. All value-tied cards are discarded whatever the tie size; on a 3-way tie the lone survivor **wins the round but takes no prize**; a 4-way tie or two 2-way ties means nobody wins; score-tied prize candidates are discarded and the next highest is taken. The leader rotates **one seat clockwise from the previous leader every round, regardless of the outcome** — who won and whether a prize was taken are irrelevant.
 
 ### Run the webapp
 
@@ -22,7 +22,7 @@ npm run serve     # http://localhost:4173
 ```powershell
 npm install
 npx playwright install chromium
-npm test          # 90+ Playwright tests, see tests/README.md
+npm test          # 110+ Playwright tests, see tests/README.md
 ```
 
 ---
@@ -85,8 +85,8 @@ Card Game/
 ### Round Flow
 1. **Reveal Phase**: Round starter chooses a player, and one random card from their Hidden hand is revealed → moves to their Shown hand
 2. **Play Phase**: Players play cards (in order) from either Hidden or Shown hands
-3. **Determination Phase**: Highest-scoring card wins; winner takes second-highest card as prize
-4. **Score Phase**: Prepare for next round
+3. **Determination Phase**: Value-tied cards are discarded; the highest remaining **Value** wins the trick; the winner's own card is discarded; score-tied prize candidates are discarded; the winner takes the highest remaining **Score** as the prize
+4. **Score Phase**: Advance the leader one seat clockwise and prepare for next round
 
 ### Card Scoring
 
@@ -99,9 +99,19 @@ Card Game/
 - J=11, Q=12, K=13, A=14
 
 ### Tie-Breaking
+
+Ties are checked at two separate points in the round.
+
+**Value ties — before the winner is determined:**
 - **2-card tie**: Discard tied Values, winner is highest remaining Value.
-- **3-card tie**: The three tied cards are discarded; the remaining player wins the round, discards their own card, and takes no prize. The same leader then leads the next round (no prize was taken).
-- **4-card tie**: All discarded, no winner
+- **3-card tie**: The three tied cards are discarded; the remaining player wins the round, discards their own card, and takes no prize.
+- **4-card tie** (or two separate 2-card ties): All discarded, no winner.
+
+**Score ties — after the winner is determined, before the prize is awarded:**
+- The non-winning survivors are the prize candidates, compared on **Score** (face value).
+- Candidates that tie each other on Score are discarded and the next highest is taken; if every candidate is tied away, the winner takes no prize.
+
+Neither outcome affects who leads next: the leader always moves one seat clockwise from the previous leader.
 
 ---
 

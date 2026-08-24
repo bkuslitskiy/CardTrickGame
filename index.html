@@ -39,13 +39,18 @@
             Each round proceeds as follows:<br>
             - <strong>Reveal:</strong> The leader chooses another player. A random card from that player's Hidden hand is placed face up into that player's Shown hand.<br>
             - <strong>Play:</strong> Players take turns placing a card from their hand (Hidden or Shown) into the Play zone, starting with the leader.<br>
-            - <strong>Determination:</strong> Discard all cards with tied Values (whatever the tie size). Rank remaining cards by Value. Highest Value card's player wins the round. Discard winner's card. Rank remaining cards by Score. Highest remaining scoring card is this round's prize.<br>
-            - <strong>Next Round:</strong> The leader for the next round is the player counter-clockwise from the previous round's winner. If no prize was taken — nobody won, or the winner had no prize to take — the leader does not change.</p>
+            - <strong>Determination:</strong> Resolved in four steps — ties are settled twice, once on Value before the winner is known, and once on Score after the winner is known but before the prize is awarded.<br>
+            &nbsp;&nbsp;&nbsp;<em>1. Value ties:</em> every card sharing its Value with another card is discarded, whatever the tie size, even if the tie isn't for the highest Value.<br>
+            &nbsp;&nbsp;&nbsp;<em>2. Winner:</em> whoever played the highest-Value card still remaining wins the round, and discards the card they played.<br>
+            &nbsp;&nbsp;&nbsp;<em>3. Score ties:</em> the cards still remaining are the prize candidates — every candidate sharing its Score with another candidate is discarded, and the next highest is taken.<br>
+            &nbsp;&nbsp;&nbsp;<em>4. Prize:</em> the winner takes the remaining candidate with the highest Score; anything left over is discarded.<br>
+            - <strong>Next Round:</strong> The leader for the next round is the player one seat clockwise from the previous round's leader — whoever played second this round. This happens every round regardless of the outcome: who won and whether a prize was taken have no effect on who leads next.</p>
 
             <p><strong>Edge Cases & Tie Breaking:</strong><br>
-            - If three cards tie in Value, they are discarded and the remaining player wins the round — but their own card is discarded too, so they take no prize.<br>
-            - If all four cards are discarded by ties (a four-way tie, or two two-way ties), nobody wins the round.<br>
-            - If potential prize cards tie in Score, they are discarded and the next highest is taken.<br>
+            - <strong>Value ties</strong> (step 1, before the winner is determined): if two cards tie in Value, both are discarded and the winner is the highest of the two that remain.<br>
+            - If three cards tie in Value, they are discarded and the remaining player wins the round — but their own card is discarded too, so there are no prize candidates and they take no prize.<br>
+            - If all four cards are discarded by Value ties (a four-way tie, or two two-way ties), nobody wins the round.<br>
+            - <strong>Score ties</strong> (step 3, after the winner is determined, before the prize is awarded): if potential prize cards tie in Score, they are discarded and the next highest is taken. If every candidate is tied away, the winner takes no prize.<br>
             - You must choose a player with cards in their Hidden hand to reveal a card. If all players are out of Hidden cards, no cards are revealed that round.</p>
             <button onclick="hideRules()" class="btn-danger" style="margin-top: 15px;">Close Rules</button>
         </div>
